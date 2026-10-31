@@ -53,9 +53,9 @@
 // @connect      jsdelivr.net
 // @connect      wp.com
 // @connect      weserv.nl
-// @run-at       document-start
 // @updateURL    https://raw.githubusercontent.com/Pompokov/nanachannel-eco-plus/main/nanachannel-eco.user.js
 // @downloadURL  https://raw.githubusercontent.com/Pompokov/nanachannel-eco-plus/main/nanachannel-eco.user.js
+// @run-at       document-start
 // @noframes
 // ==/UserScript==
 (function () {
@@ -50886,7 +50886,9 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
       if (prop !== 'color' && prop !== 'background-color' && parseFloat(cs.getPropertyValue(prop.replace('-color', '-width'))) === 0) return;
       const deja = t && t[prop];
       if (deja && el.style.getPropertyValue(prop) === deja[2]) return;
-      const n = ecoNouvelleTeinte(prop, ecoRgba(cs.getPropertyValue(prop)), ecoModeTeinte);
+      const coul = ecoRgba(cs.getPropertyValue(prop));
+if (prop === 'background-color' && coul && coul.a < 0.5 && el.matches(':hover, :active')) return;
+const n = ecoNouvelleTeinte(prop, coul, ecoModeTeinte);
       if (!n) return;
       if (!t) { t = {}; ecoTeintes.set(el, t); }
       if (!deja) t[prop] = [el.style.getPropertyValue(prop), el.style.getPropertyPriority(prop), n];
