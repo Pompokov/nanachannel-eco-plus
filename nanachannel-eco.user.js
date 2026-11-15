@@ -60934,7 +60934,9 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
         }
         [
           ['Hébergement', [['Noelshack', 'https://www.noelshack.com/', LOGOS.noelshack], ['Imgur', 'https://imgur.com/', LOGOS.imgur], ['Catbox', 'https://catbox.moe/', LOGOS.catbox],
-            ['Litterbox', 'https://litterbox.catbox.moe/', LOGOS.litterbox]]],
+            ['Litterbox', 'https://litterbox.catbox.moe/', LOGOS.litterbox],
+
+            ['storage.to', 'https://storage.to/', null, 'S.to'], ['Filebin', 'https://filebin.net/', null, 'Fb']]],
           ['Stickers', [['Risibank', 'https://risibank.fr/', LOGOS.risibank]]],
           ['Outils', [['ezgif', 'https://ezgif.com/', LOGOS.ezgif], ['wsrv.nl', 'https://wsrv.nl/', LOGOS.wsrv]]],
           ['Sons et sondages', [['Vocaroo', 'https://vocaroo.com/', LOGOS.vocaroo], ['StrawPoll', 'https://strawpoll.com/', LOGOS.strawpoll]]],
