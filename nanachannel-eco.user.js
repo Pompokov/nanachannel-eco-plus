@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nanachannel ECO+
 // @namespace    nanachannel-eco-plus
-// @version      0.9.289
+// @version      0.9.298
 // @downloadURL  https://github.com/Pompokov/nanachannel-eco-plus/raw/refs/heads/main/nanachannel-eco.user.js
 // @updateURL    https://github.com/Pompokov/nanachannel-eco-plus/raw/refs/heads/main/nanachannel-eco.user.js
 // @description  Nanachannel ECO+ : tous les modules réunis (Actualisation+, Blacklist+, Citations+, Fil+, Images+, Liens+, Messages+, MP+, Navigation+, Notifications+, Pages+, Profil+, Réactions+, Recherche+, Shitbox+, Sondage+, Thèmes+, Uploads+, Vocaroo+), activables dans le menu ECO+ sous la bannière.
@@ -61,7 +61,7 @@
 // ==/UserScript==
 (function () {
   'use strict';
-  const ECO_VERSION = "0.9.289";
+  const ECO_VERSION = "0.9.298";
   const ECO_MODULES = [];
 
   let ecoDernierAppuiDoigt = false;
@@ -72,7 +72,7 @@
     e.stopImmediatePropagation();
   }, true);
 
-  const ECO_DEFAUTS = {"nanachan-blacklist-plus":{"v":4,"reglages":{"mode":"discret","topics":"cache","citations":true,"confirmer":true,"mp":"corbeille","notifications":true,"fil":"discret"},"liste":{}},"nanachan-citations-plus":{"survol":true,"apercuTexte":true,"apercuRepondu":true,"apercuSujet":true,"sansApercuSiLigne":true,"sansApercuSiVisible":true,"delaiSurvol":600,"repondu":true,"indentation":16,"compact":true,"mediasApi":true,"ligneCitation":true,"affCitations":"numeroPseudo","affReponses":"numeroPseudo","couleurRangs":true,"ordreChrono":true,"mentionOP":true,"surlignage":true,"boutonSujet":true,"infosSujet":false,"m446":true},"nanachan-fil-plus":{"v":1,"reglages":{"ecrire":"bas","actuAuto":60,"miseEnAvant":true,"pastilleFil":true},"suivis":{}},"nanachan-notifications-plus":{"suivis":{},"exclus":[],"reglages":{"intervalle":60,"suivreFavoris":true,"notifPage":true,"dureeNotif":8,"notifNavigateur":false,"compteurOnglet":true,"styleLigne":"bandeau","tailleCloche":100,"styleCloche":"plus","couleurMessages":"#E0524F","couleurTopics":"#3E8BFF","couleurFavoris":"#F2B526","couleurMp":"#A06BFF","couleurLigneMode":"type","couleurLigne":"#DC3545","dnd":false,"dndForum":true,"dndSuivis":true,"dndFavoris":true,"dndMp":true,"notifMp":true,"dndRecap":true,"couleurFil":"#2EAD7C","dndFil":true,"notifFil":true,"notifForum":true,"notifSuivis":true,"notifFavoris":true,"suivreMesTopics":true,"mesTopics":"creation","m055":true,"histoForum":100}},"nanachan-pages-plus":{"topic":{"mode":"saisie","chargement":"auto","autoDirect":true,"m035":true,"colonne":"partout","colonneRepliee":true,"colonneVue":"compact","colonnePages":"liste","colonneVignette":44,"colonneCarte":120},"liste":{"mode":"pages","chargement":"auto","autoDirect":false,"vue":"liste","carte":"m","taille":170,"gifAnimes":true,"apercu":true,"flouRose":true,"compteChaud":true}},"nanachan-profil-plus":{"liens":true},"nanachan-reactions-plus":{"tailleSticker":32,"tailleEmoji":18,"sansFond":true,"positionNombre":"dessus","rbBarreOutils":false,"hapBarreOutils":false,"boutonReglagesOutils":false,"boutonReglagesPost":false,"boutonPostFavoris":false,"zoomSurvol":true,"zoomTaille":150,"smileyBouton":"","smileyNom":"","iconeFavoris":"","iconeFavorisNom":"","rangeesFavoris":2,"tailleFavoris":0,"vueParDossier":false,"vueFavoris":"moyennes","dossiersReduits":false,"dossiersReduitsEtroit":true,"dossiersVisibles":7,"quickReacs":true,"quickNombre":4,"quickMenuSite":true,"quickFenetre":true,"quickEditeur":true,"quickListe":[]},"nanachan-sondage-plus":{},"nanachan-uploads-plus":{"hote":"noelshack","hoteVideo":"gif","cacherPhotoForum":true,"prio166":true,"gifLossyAuto":true,"webmCompr":false},"nanachan-vocaroo-plus":{"boutonPosts":true},"nanachannel-eco-plus":{"modules":{},"tweaks":{"ecritos":"normal","infobulles":"non","pings":true,"widgetsRetract":true,"pseudosListe":true,"sansFab":false},"apparence":"lie"},"nanachannel-eco-plus-sections":{"blacklist|Options":false,"blacklist|Masquer quelqu'un":true,"blacklist|Utilisateurs masqués (0)":false,"blacklist|Modérateurs et admins (chez toi) (0)":false,"blacklist|Affichage":true,"citations|Liens de topic":false,"citations|Citations et réponses":false,"citations|Affichage des citations":true,"fil|Blogs suivis":false,"images|Images des posts":true,"images|Recherche d'image":true,"eco:tweaks|🩹 Fixes du forum (patchs non officiels)":false,"messages|Édition d'un post":false,"mpplus|Liste des discussions":true,"mpplus|Dépannage":true,"sondage|Sondages dans les messages":true,"sondage|StrawPoll":false,"uploads|Taille des images dans le post":true,"uploads|Hébergeurs tiers activés":true,"vocaroo|Barre Vocaroo+":true,"vocaroo|Envoi":true,"vocaroo|Micro":true,"vocaroo|Posts":true,"eco:tweaks|🏠 Page d'accueilRetouches de la page d'":false,"eco:tweaks|📐 Mise en pagePlacement des éléments du":false,"eco:tweaks|📱 Application NanachannelLe forum s'ins":false,"messages|Modification d'un post":true,"liens|Liens":true,"navigation|Clic et maintien":false,"navigation|Emplacement des flèches":false,"notifications|Dans un topic":false,"notifications|Alertes":false,"notifications|Ne pas déranger":false,"notifications|Fonctionnement":false,"notifications|Apparence":false,"pages|💬 Topics":false,"pages|📋 Liste des sujets":true,"pages|Affichage":false,"profil|Activité":true,"profil|Sections repliées":true,"profil|Page de profil":true,"recherche|Topics":true,"recherche|Appui maintenu sur un tag (= Ctrl + clic":true,"themes|Mes thèmes(0)":true,"eco:tweaks|✎ ÉcritureAides quand tu écris un messag":false}};
+  const ECO_DEFAUTS = {"nanachan-blacklist-plus":{"v":4,"reglages":{"mode":"discret","topics":"cache","citations":true,"confirmer":true,"mp":"corbeille","notifications":true,"fil":"discret"},"liste":{}},"nanachan-citations-plus":{"survol":true,"apercuTexte":true,"apercuRepondu":true,"apercuSujet":true,"sansApercuSiLigne":true,"sansApercuSiVisible":true,"delaiSurvol":600,"repondu":true,"indentation":16,"compact":true,"mediasApi":true,"ligneCitation":true,"affCitations":"numeroPseudo","affReponses":"numeroPseudo","couleurRangs":true,"ordreChrono":true,"mentionOP":true,"surlignage":true,"boutonSujet":true,"infosSujet":false,"m446":true},"nanachan-fil-plus":{"v":1,"reglages":{"ecrire":"bas","actuAuto":60,"miseEnAvant":true,"pastilleFil":true,"pseudo":"profil"},"suivis":{}},"nanachan-notifications-plus":{"suivis":{},"exclus":[],"reglages":{"intervalle":60,"suivreFavoris":true,"notifPage":true,"dureeNotif":8,"notifNavigateur":false,"compteurOnglet":true,"styleLigne":"bandeau","tailleCloche":100,"styleCloche":"plus","couleurMessages":"#E0524F","couleurTopics":"#3E8BFF","couleurFavoris":"#F2B526","couleurMp":"#A06BFF","couleurLigneMode":"type","couleurLigne":"#DC3545","dnd":false,"dndForum":true,"dndSuivis":true,"dndFavoris":true,"dndMp":true,"notifMp":true,"dndRecap":true,"couleurFil":"#2EAD7C","dndFil":true,"notifFil":true,"notifForum":true,"notifSuivis":true,"notifFavoris":true,"suivreMesTopics":true,"mesTopics":"creation","m055":true,"histoForum":100}},"nanachan-pages-plus":{"topic":{"mode":"saisie","chargement":"auto","autoDirect":true,"m035":true,"colonne":"partout","colonneRepliee":true,"colonneVue":"compact","colonnePages":"liste","colonneVignette":44,"colonneCarte":120},"liste":{"mode":"pages","chargement":"auto","autoDirect":false,"vue":"liste","carte":"m","taille":170,"gifAnimes":true,"apercu":true,"flouRose":true,"compteChaud":true}},"nanachan-profil-plus":{"liens":true},"nanachan-reactions-plus":{"tailleSticker":32,"tailleEmoji":18,"sansFond":true,"positionNombre":"dessus","rbBarreOutils":false,"hapBarreOutils":false,"boutonReglagesOutils":false,"boutonReglagesPost":false,"boutonPostFavoris":false,"zoomSurvol":true,"zoomTaille":150,"smileyBouton":"","smileyNom":"","iconeFavoris":"","iconeFavorisNom":"","rangeesFavoris":2,"tailleFavoris":0,"vueParDossier":false,"vueFavoris":"moyennes","dossiersReduits":false,"dossiersReduitsEtroit":true,"dossiersVisibles":7,"quickReacs":true,"quickNombre":4,"quickMenuSite":true,"quickFenetre":true,"quickEditeur":true,"quickListe":[]},"nanachan-sondage-plus":{},"nanachan-uploads-plus":{"hote":"noelshack","hoteVideo":"gif","cacherPhotoForum":true,"prio166":true,"gifLossyAuto":true,"webmCompr":false},"nanachan-vocaroo-plus":{"boutonPosts":true},"nanachannel-eco-plus":{"modules":{},"tweaks":{"ecritos":"normal","infobulles":"non","pings":true,"widgetsRetract":true,"pseudosListe":true,"drapeauxPays":true,"sansFab":false},"apparence":"lie"},"nanachannel-eco-plus-sections":{"blacklist|Options":false,"blacklist|Masquer quelqu'un":true,"blacklist|Utilisateurs masqués (0)":false,"blacklist|Modérateurs et admins (chez toi) (0)":false,"blacklist|Affichage":true,"citations|Liens de topic":false,"citations|Citations et réponses":false,"citations|Affichage des citations":true,"fil|Blogs suivis":false,"images|Images des posts":true,"images|Recherche d'image":true,"eco:tweaks|🩹 Fixes du forum (patchs non officiels)":false,"messages|Édition d'un post":false,"mpplus|Liste des discussions":true,"mpplus|Dépannage":true,"sondage|Sondages dans les messages":true,"sondage|StrawPoll":false,"uploads|Taille des images dans le post":true,"uploads|Hébergeurs tiers activés":true,"vocaroo|Barre Vocaroo+":true,"vocaroo|Envoi":true,"vocaroo|Micro":true,"vocaroo|Posts":true,"eco:tweaks|🏠 Page d'accueilRetouches de la page d'":false,"eco:tweaks|📐 Mise en pagePlacement des éléments du":false,"eco:tweaks|📱 Application NanachannelLe forum s'ins":false,"messages|Modification d'un post":true,"liens|Liens":true,"navigation|Clic et maintien":false,"navigation|Emplacement des flèches":false,"notifications|Dans un topic":false,"notifications|Alertes":false,"notifications|Ne pas déranger":false,"notifications|Fonctionnement":false,"notifications|Apparence":false,"pages|💬 Topics":false,"pages|📋 Liste des sujets":true,"pages|Affichage":false,"profil|Activité":true,"profil|Sections repliées":true,"profil|Page de profil":true,"recherche|Topics":true,"recherche|Appui maintenu sur un tag (= Ctrl + clic":true,"themes|Mes thèmes(0)":true,"eco:tweaks|✎ ÉcritureAides quand tu écris un messag":false}};
   const ECO_DEFAUTS_GM = {"actualisation:actifPageForum": false, "actualisation:tailleNotif": 100};
 
   function ecoCompleter(cible, def) {
@@ -2520,7 +2520,7 @@
 })();
   } });
 
-  ECO_MODULES.push({ id: "notifications", nom: "Notifications+", version: "0.60", desc: "Cloche 🔔+, topics suivis, favoris, MP, blogs suivis (Fil+) et non-lus.", debut: "start", page: true, reglages: true, code: function (window, history) {
+  ECO_MODULES.push({ id: "notifications", nom: "Notifications+", version: "0.62", desc: "Cloche 🔔+, topics suivis, favoris, MP, blogs suivis (Fil+) et non-lus.", debut: "start", page: true, reglages: true, code: function (window, history) {
 (function () {
   'use strict';
 
@@ -5299,7 +5299,8 @@
     bouton.title = 'Notifications+';
     bouton.style.position = 'relative';
     const media = R().styleCloche === 'perso' ? lireMedia() : '';
-    const taille = cloche ? Math.round(cloche.getBoundingClientRect().width || parseFloat(cloche.getAttribute('width')) || 22) : 22;
+
+    const taille = mode === 'cloche' ? 24 : (cloche ? Math.round(cloche.getBoundingClientRect().width || parseFloat(cloche.getAttribute('width')) || 22) : 22);
     bouton._npBase = taille;
     if (media) {
       bouton.appendChild(elementMedia(media, taille));
@@ -5308,6 +5309,11 @@
       const icone = cloche.cloneNode(true);
       icone.querySelectorAll('circle').forEach(function (c) { c.remove(); });
       if (R().styleCloche !== 'site') ajouterPlus(icone);
+      icone.setAttribute('width', String(taille));
+      icone.setAttribute('height', String(taille));
+      icone.style.width = taille + 'px';
+      icone.style.height = taille + 'px';
+      icone.style.flex = 'none';
       bouton.appendChild(icone);
     } else {
       bouton.innerHTML = SVG_CLOCHE;
@@ -6477,6 +6483,13 @@
 
   window.addEventListener('resize', function () { try { placerColonnePastilles(); } catch (e) {  } });
 
+  try {
+    new MutationObserver(function () {
+      setTimeout(function () { try { placerColonnePastilles(); } catch (e) {  } }, 60);
+      setTimeout(function () { try { placerColonnePastilles(); } catch (e) {  } }, 400);
+    }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-notif-pos'] });
+  } catch (e) {  }
+
   surChangementDePage();
   assurerBouton();
   majAffichage();
@@ -6542,7 +6555,7 @@
 })();
   } });
 
-  ECO_MODULES.push({ id: "pages", nom: "Pages+", version: "0.64", desc: "Par pages, saisie du n° de page ; topics sans pages.", debut: "start", page: true, reglages: true, code: function (window, history) {
+  ECO_MODULES.push({ id: "pages", nom: "Pages+", version: "0.65", desc: "Par pages, saisie du n° de page ; topics sans pages.", debut: "start", page: true, reglages: true, code: function (window, history) {
 (function () {
   'use strict';
 
@@ -9037,7 +9050,7 @@
 
     [['apercu', 'Grand aperçu au survol (comme Images+)', 'Image en grand à côté du curseur, vidéos jouées. Son : réglages d\'Images+.'],
       ['flouRose', 'Flouter les topics NSFW (roses)', 'Vignette floutée, nette au survol. Décoché : image nette. L\'étiquette NSFW reste.'],
-      ['compteChaud', 'Compteur en rouge pour les topics chauds', '« R: » en rouge quand le topic a plus de 20 messages (dossier rouge du site ; aussi les topics roses).']].forEach(function (o) {
+      ['compteChaud', 'Topics chauds en rouge (compteur + dégradé)', '« R: » en rouge et dégradé rouge derrière le topic quand il a plus de 20 messages, comme la liste du forum (dossier rouge ; aussi les topics roses).']].forEach(function (o) {
       const lc = document.createElement('label');
       lc.style.cssText = 'display:flex;gap:7px;align-items:flex-start;padding:4px 4px 0;cursor:pointer;font-size:12px;';
       const cb = document.createElement('input');
@@ -9372,6 +9385,7 @@
 
     '.carte[data-rose]{border-color:#d9559f;}',
     '.carte[data-chaud] .infos b{color:#DB3A2A;font-weight:800;}',
+    '.carte[data-chaud]{background-image:linear-gradient(to right,#e9456024,#e9456000 45%);}',
     '.badges .nsfw{font:800 9.5px/14px Arial,sans-serif;letter-spacing:.4px;padding:0 5px;border-radius:4px;background:#d9559f;color:#fff;filter:none;}',
     '.carte[data-flou]:not(:hover) .vignette img:not(.icone),.carte[data-flou]:not(:hover) .vignette video{filter:blur(14px) saturate(.8);}',
   ].join('\n');
@@ -10420,6 +10434,8 @@
     '.s{font-size:11px;opacity:.65;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}',
     '.s b{font-weight:700;}',
     '.s b[data-chaud]{color:#DB3A2A;font-weight:800;opacity:1;}',
+
+    '.l[data-chaud]{background-image:linear-gradient(to right,#e9456024,#e9456000 45%);}',
     '.nsfw{font:800 9px/13px Arial,sans-serif;letter-spacing:.3px;padding:0 4px;border-radius:3px;background:#d9559f;color:#fff;margin-left:4px;vertical-align:1px;}',
     '.bord{position:absolute;top:0;right:-4px;width:8px;height:100%;cursor:col-resize;touch-action:none;}',
 
@@ -10647,6 +10663,7 @@
     a.title = s.title + (s.author.username ? ' — ' + s.author.username : '');
     a.toggleAttribute('data-rose', !!s.is_pink);
     a.toggleAttribute('data-flou', !!s.is_pink && reglages.liste.flouRose);
+    a.toggleAttribute('data-chaud', !s.is_epingle && s.post_count > 20 && reglages.liste.compteChaud);
 
     if (a._mode !== mode) {
       a._mode = mode;
@@ -10897,7 +10914,7 @@
     boite.appendChild(curseurAffichageCol());
     const opts = document.createElement('div');
     opts.style.cssText = 'margin-top:4px;';
-    [['compteChaud', 'Compteur en rouge pour les topics chauds', true],
+    [['compteChaud', 'Topics chauds en rouge (compteur + dégradé)', true],
       ['flouRose', 'Flouter les topics NSFW (roses)', false],
       ['apercu', 'Grand aperçu au survol', false]].forEach(function (o) {
       const l = document.createElement('label');
@@ -13257,7 +13274,7 @@
 })();
   } });
 
-  ECO_MODULES.push({ id: "citations", nom: "Citations+", version: "4.56", desc: "Citations dépliées, aperçus et « Répondu par ».", debut: "idle", page: true, reglages: true, code: function (window, history) {
+  ECO_MODULES.push({ id: "citations", nom: "Citations+", version: "4.58", desc: "Citations dépliées, aperçus et « Répondu par ».", debut: "idle", page: true, reglages: true, code: function (window, history) {
 (function () {
   'use strict';
 
@@ -16051,7 +16068,64 @@
     reglesRang.add(classe);
     const sel = 'span.post-ref[data-cp-rang="' + classe + '"]';
     styleRangs.textContent += sel + ',' + sel + '::before,' + sel + '::after{color:' + couleur + '!important;}\n';
+
+    styleRangs.textContent += 'a.post-ref[data-cp-rang="' + classe + '"]{color:' + couleur + '!important;font-weight:700;}\n';
   }
+
+  const RANGS_API = { admin: 'admin-style', modo: 'moderator-style' };
+  const COULEURS_RANG_DEFAUT = { 'admin-style': '#f13b3b', 'moderator-style': '#4ead3b' };
+  const rangsPseudos = new Map();
+  function rangDuPseudo(pseudo) {
+    const k = String(pseudo || '').trim().toLowerCase();
+    if (!k) return null;
+    const nom = Array.from(document.querySelectorAll('.post-container a.post-username')).find(function (a) {
+      return a.textContent.trim().toLowerCase() === k && !a.closest('[' + ATTR_ID + '], [' + ATTR_HOVER_PREVIEW + ']');
+    });
+    if (nom) {
+      const classe = Array.from(nom.classList).find(function (c) { return CLASSES_NON_RANG.indexOf(c) === -1; }) || '';
+      if (classe) assurerRegleRang(classe, nom);
+      rangsPseudos.set(k, classe);
+      return classe || null;
+    }
+    if (rangsPseudos.has(k)) return rangsPseudos.get(k) || null;
+    rangsPseudos.set(k, null);
+    fetch(location.origin + '/nanachannel/users/' + encodeURIComponent(pseudo.trim()) + '/', { credentials: 'include', headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        const classe = j ? (j.is_admin ? RANGS_API.admin : j.is_moderator ? RANGS_API.modo : '') : '';
+        rangsPseudos.set(k, classe);
+        if (classe) { majAffichageCitations(); }
+      }).catch(function () { rangsPseudos.set(k, ''); });
+    return null;
+  }
+  function majMentions(racines) {
+    if (!reglages.couleurRangs) {
+      ecoDans(racines, 'a.post-ref[data-cp-rang]').forEach(function (a) { a.removeAttribute('data-cp-rang'); });
+      return;
+    }
+    ecoDans(racines, 'a.post-ref').forEach(function (a) {
+      if (!/^\s*@/.test(a.textContent)) return;
+      const mm = (a.getAttribute('href') || '').match(/\/user\/([^/?#]+)/);
+      if (!mm) return;
+      let pseudo = mm[1];
+      try { pseudo = decodeURIComponent(pseudo); } catch (e) {  }
+      const classe = rangDuPseudo(pseudo);
+      if (classe && !reglesRang.has(classe)) {
+        if (!couleurDansFeuilles(classe) && COULEURS_RANG_DEFAUT[classe]) {
+          reglesRang.add(classe);
+          const sel = 'a.post-ref[data-cp-rang="' + classe + '"]';
+          styleRangs.textContent += sel + '{color:' + COULEURS_RANG_DEFAUT[classe] + '!important;font-weight:700;}\n';
+        } else assurerRegleRang(classe, null);
+      }
+      poserAttr(a, 'data-cp-rang', classe || null);
+    });
+  }
+
+  new MutationObserver(ecoPlanificateur(function (racines) {
+
+    const r = racines && racines.length ? racines : Array.from(document.querySelectorAll(ECO_APERCU));
+    if (r.length) majAffichageCitations(r);
+  })).observe(document.body, { childList: true, subtree: true, characterData: true });
 
   let pseudoOP = null;
   let topicOP = null;
@@ -16097,8 +16171,9 @@
     else if (el.getAttribute(nom) !== valeur) el.setAttribute(nom, valeur);
   }
 
-  function majAffichageCitations() {
-    document.querySelectorAll('span.post-ref').forEach(function (span) {
+  function majAffichageCitations(racines) {
+    majMentions(racines || null);
+    ecoDans(racines || null, 'span.post-ref').forEach(function (span) {
       const mode = reglages.affCitations;
       const numero = extraireNumero(span);
       poserAttr(span, 'data-cp-rang', reglages.couleurRangs && numero ? rangDuNumero(numero) : null);
@@ -19524,7 +19599,7 @@
 })();
   } });
 
-  ECO_MODULES.push({ id: "liens", nom: "Liens+", version: "0.39", desc: "Intégration des vidéos, sondages StrawPoll, titres des liens.", debut: "idle", page: false, reglages: true, code: function (GM_getValue, GM_setValue, GM_info) {
+  ECO_MODULES.push({ id: "liens", nom: "Liens+", version: "0.40", desc: "Intégration des vidéos, sondages StrawPoll, titres des liens.", debut: "idle", page: false, reglages: true, code: function (GM_getValue, GM_setValue, GM_info) {
 (function () {
   'use strict';
 
@@ -21018,6 +21093,8 @@
       const r = reconnaitre(f.getAttribute('src') || f.getAttribute(ATTR + '-src') || '');
       if (!r || r.service.fichier) return;
 
+      if (r.infos && f.closest('.shorts-embed-wrapper') && 'court' in r.infos) r.infos.court = true;
+
       const enSignature = !!f.closest('.signature') && !reglages.autoSignatures;
       if (!enSignature && (!reglages.replier || !mediaActif(r.service.nom, 'replier'))) { rouageLecteur(f, r); return; }
 
@@ -21234,7 +21311,7 @@
 })();
   } });
 
-  ECO_MODULES.push({ id: "messages", nom: "Messages+", version: "0.32", desc: "Fenêtre de réponse flottante et aperçu de l'édition.", debut: "idle", page: true, reglages: false, code: function (window, history) {
+  ECO_MODULES.push({ id: "messages", nom: "Messages+", version: "0.36", desc: "Fenêtre de réponse flottante et aperçu de l'édition.", debut: "idle", page: true, reglages: false, code: function (window, history) {
 (function () {
   'use strict';
 
@@ -21371,8 +21448,36 @@
       '-webkit-mask:' + MASQUE_POINTS + ' center/contain no-repeat;mask:' + MASQUE_POINTS + ' center/contain no-repeat}' +
     '[data-mp-poignee][data-mp-survol]{opacity:.65}' +
     '[data-mp-poignee]:hover,[data-mp-poignee][data-mp-tire]{opacity:1;background:var(--line-color,var(--button-text-color,#C5C8C6))}' +
-    '@media (hover:none){[data-mp-poignee]{opacity:.6}}';
+    '@media (hover:none){[data-mp-poignee]{opacity:.6}}' +
+
+    '[data-mp-fenetre]{display:flex!important;flex-direction:column!important;gap:8px!important;padding:0 8px 0!important}' +
+    '[data-mp-fenetre] > [data-mp-entete]{order:-1;margin:0 -8px!important;flex:none}' +
+    '[data-mp-fenetre] > *{margin-top:0!important;margin-bottom:0!important;flex-shrink:0!important}' +
+    '[data-mp-fenetre] > [data-mp-boutons]{order:5;position:sticky;bottom:0;z-index:4;margin-top:auto!important;padding:6px 0 12px!important;' +
+      'background:var(--nana-background-color,#1a1c1e);display:flex;gap:8px;justify-content:center}' +
+    '[data-mp-fenetre] > [data-mp-boutons] button{height:34px!important;min-height:0!important;padding-top:0!important;padding-bottom:0!important;margin-top:0!important;margin-bottom:0!important}' +
+    '[data-mp-fenetre] [data-mp-titre-apercu]{margin:0 0 6px!important;font-size:inherit}' +
+    '[data-mp-fenetre] .preview-box{margin-bottom:0!important}' +
+
+    '[data-mp-fenetre]:not(:has(> [data-mp-boutons])){padding-bottom:18px!important}';
   document.head.appendChild(styleAuto);
+
+  function finitionFenetre(f, deja) {
+    if (!f || !(flottant || deja)) return;
+    f.setAttribute('data-mp-fenetre', '');
+    const rangee = Array.from(f.children).find(function (c) {
+      return !c.hasAttribute('data-mp-entete') && Array.from(c.querySelectorAll ? c.querySelectorAll('button') : []).concat(c.tagName === 'BUTTON' ? [c] : [])
+        .some(function (b) { return /^(Poster|Publier|Confirmer|Annuler|Envoyer)$/i.test(b.textContent.trim()); }) && !c.querySelector('textarea');
+    });
+    Array.from(f.querySelectorAll('[data-mp-boutons]')).forEach(function (c) { if (c !== rangee) c.removeAttribute('data-mp-boutons'); });
+    if (rangee && !rangee.hasAttribute('data-mp-boutons')) rangee.setAttribute('data-mp-boutons', '');
+    f.querySelectorAll('h1,h2,h3,h4,div,span,p,label').forEach(function (el) {
+      const t = el.firstChild;
+      if (!t || t.nodeType !== 3 || !/^\s*Aperçu du message\s*:?\s*$/.test(t.data)) return;
+      el.setAttribute('data-mp-titre-apercu', '');
+      if (/:\s*$/.test(t.data)) t.data = t.data.replace(/\s*:\s*$/, ' ');
+    });
+  }
 
   const CLASSE_APPUI = 'nanachan-pastille-appui';
   const styleAppui = document.createElement('style');
@@ -21380,10 +21485,25 @@
     '.' + CLASSE_APPUI + '{opacity:1!important;transition:none!important;background:var(--button-color,#373B41)!important;}';
   document.head.appendChild(styleAppui);
 
-  function trouverZoneTexte() {
+  function zoneReponse() {
     return Array.from(document.querySelectorAll('textarea')).find(function (z) {
       return !z.closest('.post-container[id^="post-"]');
     }) || null;
+  }
+
+  function zoneEdition() {
+    return Array.from(document.querySelectorAll('.post-container[id^="post-"] textarea')).find(function (z) {
+      return !!blocEdition(z);
+    }) || null;
+  }
+  function trouverZoneTexte() {
+    const ze = zoneEdition();
+    if (ze) return ze;
+    if (flottant && formulaireFlottant && formulaireFlottant.isConnected) {
+      const z = formulaireFlottant.querySelector('textarea');
+      if (z) return z;
+    }
+    return zoneReponse();
   }
 
   function editionEnCours() {
@@ -21405,7 +21525,13 @@
   }
 
   function trouverFormulaireReponse() {
-    const zone = trouverZoneTexte();
+    const ze = zoneEdition();
+    if (ze) return blocEdition(ze);
+    if (flottant && formulaireFlottant && formulaireFlottant.isConnected) return formulaireFlottant;
+    return formulaireReponse();
+  }
+  function formulaireReponse() {
+    const zone = zoneReponse();
     if (!zone) return null;
     let noeud = zone.parentElement;
     while (noeud && noeud !== document.body) {
@@ -21681,6 +21807,8 @@
       attenteGlobale = null;
 
       if (flottant && (!formulaireFlottant || !formulaireFlottant.isConnected)) replierFormulaire();
+
+      else if (flottant && formulaireFlottant.closest('.post-container[id^="post-"]') && !formulaireFlottant.querySelector('textarea')) replierFormulaire();
       if (!boiteApercuReglee || !boiteApercuReglee.isConnected) appliquerApercu();
       majEtatPastille();
     });
@@ -21708,7 +21836,7 @@
     boutonTaille.textContent = auto ? '↕ Auto' : '⤡ Libre';
     boutonTaille.style.borderStyle = auto ? 'solid' : 'dashed';
     boutonTaille.title = auto
-      ? 'Taille auto : tout le formulaire est visible (on peut seulement l\'agrandir). Clic : taille libre'
+      ? 'Taille auto : la fenêtre prend la taille de son contenu. Clic, ou tirer la poignée : taille libre'
       : 'Taille libre (tirée à la poignée). Clic : taille auto (tout le formulaire visible)';
   }
 
@@ -21737,7 +21865,7 @@
       const t = lireTailleSauvegardee();
       if (t) {
         f.style.width = largeurVoulue() + 'px';
-        f.style.height = Math.min(t.hauteur, window.innerHeight - 8) + 'px';
+        f.style.height = Math.min(Math.max(t.hauteur, hauteurMiniLibre(f)), window.innerHeight - 8) + 'px';
       } else {
 
         f.style.height = f.offsetHeight + 'px';
@@ -21785,7 +21913,7 @@
       if (attente) return;
       attente = requestAnimationFrame(function () {
         attente = null;
-        if (flottant) appliquerApercu();
+        if (flottant) { appliquerApercu(); finitionFenetre(formulaire); }
       });
     });
     observateurFormulaire.observe(formulaire, { childList: true, subtree: true });
@@ -21798,6 +21926,20 @@
     appliquerApercu();
   }
 
+  function hauteurMiniLibre(f) {
+    if (!f) return 120;
+    const barre = trouverBarreOutils(f);
+    const zone = f.querySelector('textarea');
+    const repere = barre || zone;
+    if (!repere) return 120;
+    const rf = f.getBoundingClientRect();
+    let bas = repere.getBoundingClientRect().bottom - rf.top + f.scrollTop + 8;
+    const rangee = f.querySelector(':scope > [data-mp-boutons]');
+    if (rangee) bas += rangee.offsetHeight;
+    else bas += 18;
+    const bord = parseFloat(getComputedStyle(f).borderBottomWidth) || 0;
+    return Math.min(Math.max(120, Math.ceil(bas + bord)), window.innerHeight - 8);
+  }
   function lireTailleSauvegardee() {
     try {
       const brut = localStorage.getItem(CLE_TAILLE);
@@ -22023,7 +22165,8 @@
     let largeurMini = 0;
     let hauteurMiniFenetre = 120;
 
-    function hauteurMiniUtile() {
+    function hauteurMiniUtile() { return hauteurMiniLibre(formulaire); }
+    function hauteurMiniUtileAncienne() {
       const barre = trouverBarreOutils(formulaire);
       if (!barre) return 120;
       const rf = formulaire.getBoundingClientRect();
@@ -22045,6 +22188,12 @@
     glisserAvecPointeur(redimensionneur, function (e) {
       redimensionneur.setAttribute('data-mp-tire', '');
 
+      if (modeAuto()) {
+        ecrireModeTaille('libre');
+        formulaire.style.minHeight = '';
+        poserMargesMode(formulaire);
+        majBoutonTaille();
+      }
       departX = e.clientX;
       departY = e.clientY;
       largeurDepart = formulaire.offsetWidth;
@@ -22059,13 +22208,7 @@
       const nouvelleLargeur = Math.max(Math.min(largeurDepart + (e.clientX - departX), largeurMax), Math.min(largeurMini, largeurMax));
       const nouvelleHauteur = Math.max(Math.min(hauteurDepart + (e.clientY - departY), hauteurMax), Math.min(hauteurMiniFenetre, hauteurMax));
       formulaire.style.width = nouvelleLargeur + 'px';
-      if (modeAuto()) {
-
-        formulaire.style.height = 'auto';
-        formulaire.style.minHeight = nouvelleHauteur + 'px';
-      } else {
-        formulaire.style.height = nouvelleHauteur + 'px';
-      }
+      formulaire.style.height = nouvelleHauteur + 'px';
       placerPoignee();
     }, function () {
       redimensionneur.removeAttribute('data-mp-tire');
@@ -22094,7 +22237,7 @@
     const formulaire = trouverFormulaireReponse();
     if (!formulaire) return null;
 
-    if (!flottant && editionEnCours()) { signalerEdition(); return null; }
+    if (flottant && formulaireFlottant !== formulaire) replierFormulaire();
 
     if (!flottant) {
       formulaireFlottant = formulaire;
@@ -22112,12 +22255,22 @@
       formulaire.style.overflowX = 'hidden';
       formulaire.style.boxSizing = 'border-box';
       formulaire.classList.add(CLASSE_SANS_BARRES);
+      finitionFenetre(formulaire, true);
       formulaire.style.border = '1px solid var(--border-color, #373B41)';
       formulaire.style.borderRadius = '6px';
       formulaire.style.boxShadow = '0 6px 24px rgba(0,0,0,.5)';
       formulaire.style.background = 'var(--nana-background-color, #1a1c1e)';
 
       assurerEntete(formulaire);
+
+      {
+        const post = formulaire.closest('.post-container[id^="post-"]');
+        const t = entete.firstChild;
+        const txt = post ? '✎ Édition de ton post n° ' + (numeroDuPost(post) || '?') : 'Messages+';
+        if (t && t.textContent !== txt) t.textContent = txt;
+        entete.toggleAttribute('data-mp-edition', !!post);
+        entete.title = post ? 'Tu modifies ce post (Confirmer / Annuler en bas de la fenêtre). N° d\'un post cliqué : >>n ajouté ici.' : '';
+      }
 
       entete.style.top = '-' + (parseFloat(getComputedStyle(formulaire).paddingTop) || 0) + 'px';
       assurerPlaceholder(formulaire);
@@ -22131,7 +22284,7 @@
       const tailleSauvegardee = modeAuto() ? null : lireTailleSauvegardee();
       formulaire.style.width = largeurVoulue() + 'px';
       if (tailleSauvegardee) {
-        formulaire.style.height = tailleSauvegardee.hauteur + 'px';
+        formulaire.style.height = Math.min(Math.max(tailleSauvegardee.hauteur, hauteurMiniLibre(formulaire)), window.innerHeight - 8) + 'px';
       }
       if (observateurTaille) observateurTaille.disconnect();
       if (window.ResizeObserver) {
@@ -22166,6 +22319,8 @@
       if (formulaire._mpPaddingBas !== undefined) { formulaire.style.paddingBottom = formulaire._mpPaddingBas; formulaire._mpPaddingBas = undefined; }
       formulaire._mpPaddingBasCalc = undefined;
       formulaire.removeAttribute('data-mp-auto');
+      formulaire.removeAttribute('data-mp-fenetre');
+      formulaire.querySelectorAll('[data-mp-boutons]').forEach(function (c) { c.removeAttribute('data-mp-boutons'); });
       formulaire.style.minHeight = '';
       formulaire.style.position = '';
       formulaire.style.zIndex = '';
@@ -22389,9 +22544,9 @@
   }
 
   async function rendreApercuEditionMaintenant(zoneEdition, cadre, force) {
-    const zoneReponse = trouverZoneTexte();
-    const formulaire = trouverFormulaireReponse();
-    if (!zoneReponse || !formulaire) {
+    const zoneRep = zoneReponse();
+    const formulaire = formulaireReponse();
+    if (!zoneRep || !formulaire) {
       cadre._boite.textContent = '(aperçu indisponible : pas de « Répondre au topic » sur cette page)';
       return;
     }
@@ -22400,15 +22555,15 @@
     cadre._dernierTexte = texte;
     cadre.style.display = texte.trim() ? '' : 'none';
     if (!texte.trim()) return;
-    const avant = zoneReponse.value;
-    const selDebut = zoneReponse.selectionStart;
-    const selFin = zoneReponse.selectionEnd;
+    const avant = zoneRep.value;
+    const selDebut = zoneRep.selectionStart;
+    const selFin = zoneRep.selectionEnd;
     rendusEnCours++;
     let html = null;
     try {
       const apAvant = trouverApercu(formulaire);
       const htmlAvant = apAvant && apAvant.boite ? apAvant.boite.innerHTML : null;
-      ecrireZone(zoneReponse, texte);
+      ecrireZone(zoneRep, texte);
       await attendreMicrotaches();
       let ap = trouverApercu(formulaire);
 
@@ -22440,8 +22595,8 @@
       }
       try { refermerSpoilersSite(formulaire, bascules); } catch (e) {  }
     } finally {
-      ecrireZone(zoneReponse, avant);
-      try { zoneReponse.setSelectionRange(selDebut, selFin); } catch (e) {  }
+      ecrireZone(zoneRep, avant);
+      try { zoneRep.setSelectionRange(selDebut, selFin); } catch (e) {  }
       rendusEnCours--;
     }
     if (html === null) { cadre._boite.textContent = '(aperçu indisponible)'; cadre._htmlBrut = null; return null; }
@@ -22532,7 +22687,7 @@
 })();
   } });
 
-  ECO_MODULES.push({ id: "mpplus", nom: "MP+", version: "0.13", desc: "Discussions privées : aperçu 1:1, recherche, tout charger, corbeille, profils.", debut: "start", page: true, reglages: false, code: function (window, history) {
+  ECO_MODULES.push({ id: "mpplus", nom: "MP+", version: "0.14", desc: "Discussions privées : aperçu 1:1, recherche, tout charger, corbeille, profils.", debut: "start", page: true, reglages: false, code: function (window, history) {
 (function () {
   'use strict';
 
@@ -23142,6 +23297,9 @@
     'img[data-mpp-avatar]:hover{outline:2px solid var(--line-color,var(--button-color,#ffb840));outline-offset:1px}',
     '.mpp-apercu-titre{display:flex;align-items:center;gap:8px;font:600 12px/1.2 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--username-color,var(--text-color,#ddd));opacity:.9;margin:0 0 4px 2px;cursor:pointer;user-select:none}',
     '.mpp-apercu-titre small{font-weight:400;opacity:.7}',
+
+    '.mpp-apercu-boite{scrollbar-width:thin;scrollbar-color:var(--border-color,rgba(127,127,127,.5)) transparent}',
+    '.mpp-apercu-boite::-webkit-scrollbar{width:6px}.mpp-apercu-boite::-webkit-scrollbar-track{background:transparent}.mpp-apercu-boite::-webkit-scrollbar-thumb{background:var(--border-color,rgba(127,127,127,.5));border-radius:3px}',
     '.mpp-apercu-boite{box-sizing:border-box;padding:8px 12px;border-radius:12px;max-height:35vh;overflow:auto;word-break:break-word;',
     '  background:var(--preview-background-color,var(--container-color,#2a2b30));color:var(--text-color,#ddd);border:1px solid var(--border-color,#3a3b41)}',
     '.mpp-apercu-boite img.sticker,.mpp-apercu-boite img[data-mpp-img]{max-width:min(100%,320px);max-height:220px;vertical-align:middle}',
@@ -35856,7 +36014,7 @@
 })();
   } });
 
-  ECO_MODULES.push({ id: "shitbox", nom: "Shitbox+", version: "0.6", desc: "Pubs au clic et défilement automatique.", debut: "idle", page: false, reglages: true, code: function (GM_getValue, GM_setValue, GM_info) {
+  ECO_MODULES.push({ id: "shitbox", nom: "Shitbox+", version: "0.8", desc: "Pubs au clic, défilement réglable (20 s max).", debut: "idle", page: false, reglages: true, code: function (GM_getValue, GM_setValue, GM_info) {
 (function () {
   'use strict';
 
@@ -35941,27 +36099,28 @@
 
   function ecoGlisserEnCours() { return document.documentElement.hasAttribute('data-rp-glisser'); }
 
-  const VERSION = '0.6';
+  const VERSION = '0.8';
   document.documentElement.setAttribute('data-shitbox-plus', VERSION);
   const journal = function () {
     try { console.info.apply(console, ['[Shitbox+]'].concat(Array.from(arguments))); } catch (e) {  }
   };
 
   const DEFAUTS = {
-    auto: true,
-    dureeImage: 10,
+    dureeImage: 20,
     finAnim: true,
-    tours: 1,
     pauseSurvol: true,
-    barre: true,
+    barre: 'mini',
     ordre: 'melange',
     fondu: true,
   };
-  const LIMITES = { dureeImage: [2, 60], tours: [1, 10] };
-  const ANIM_MIN_MS = 3000;
+  const LIMITES = { dureeImage: [2, 20] };
+  const BARRES = ['mini', 'forum'];
 
   let reglages = Object.assign({}, DEFAUTS, GM_getValue('reglages', {}) || {});
-  delete reglages.son;
+  ['son', 'auto', 'tours'].forEach(function (k) { delete reglages[k]; });
+  if (typeof reglages.barre === 'boolean' || BARRES.indexOf(reglages.barre) === -1) reglages.barre = DEFAUTS.barre;
+  reglages.dureeImage = Math.max(LIMITES.dureeImage[0], Math.min(LIMITES.dureeImage[1], +reglages.dureeImage || DEFAUTS.dureeImage));
+  reglages.auto = true;
   function enregistrerReglages() { GM_setValue('reglages', reglages); }
 
   let catalogue = GM_getValue('catalogue', null);
@@ -36352,11 +36511,7 @@
     lancerVideo(v);
   }
 
-  function toursVises(e) {
-    const t = Math.max(1, reglages.tours | 0);
-    if (!e.dureeTour) return t;
-    return Math.max(t, Math.ceil(ANIM_MIN_MS / e.dureeTour));
-  }
+  function toursVises() { return 1; }
   function totalPour(e) {
     if ((e.type === 'anime' || e.type === 'video') && reglages.finAnim && e.dureeTour > 0) return toursVises(e) * e.dureeTour;
     return reglages.dureeImage * 1000;
@@ -36369,11 +36524,32 @@
     return true;
   }
 
+  let barreForum = null;
+  function poserBarreForum() {
+    const site = widget && widget.querySelector('.shitbox-progress-wrap:not([data-sbp-copie])');
+    if (site && !site.classList.contains('sbp-cache-site')) site.classList.add('sbp-cache-site');
+    if (reglages.barre !== 'forum' || !site || !scene || !scene.isConnected) { if (barreForum) { barreForum.remove(); barreForum = null; } return; }
+    if (barreForum && barreForum.isConnected && barreForum.previousElementSibling === scene) return;
+    if (barreForum) barreForum.remove();
+    barreForum = site.cloneNode(true);
+    barreForum.classList.remove('sbp-cache-site');
+    barreForum.setAttribute('data-sbp-copie', '');
+    barreForum.style.pointerEvents = 'none';
+    scene.after(barreForum);
+  }
   function majBarre(fraction) {
-    if (!barre) return;
-    const visible = reglages.barre && reglages.auto && etat && pubsDisponibles().length > 1;
-    barre.style.opacity = visible ? '1' : '0';
-    barre.firstChild.style.width = (Math.max(0, Math.min(1, fraction)) * 100).toFixed(2) + '%';
+    const f = (Math.max(0, Math.min(1, fraction)) * 100).toFixed(2) + '%';
+    const visible = !!etat && pubsDisponibles().length > 1;
+    if (barre) {
+      const v = visible && reglages.barre === 'mini';
+      barre.style.opacity = v ? '1' : '0';
+      barre.firstChild.style.width = f;
+    }
+    if (barreForum) {
+      barreForum.style.visibility = visible ? '' : 'hidden';
+      const i = barreForum.querySelector('.shitbox-progress-bar') || barreForum.firstElementChild;
+      if (i) i.style.width = f;
+    }
   }
 
   let dernierTick = performance.now();
@@ -36484,7 +36660,7 @@
       if (nouvelle) journal('nouvelle pub vue :', src);
       lancerRecherche(false, src);
     }
-    if (natif === n && scene && scene.isConnected) return;
+    if (natif === n && scene && scene.isConnected) { poserBarreForum(); return; }
 
     natif = n;
     if (scene) scene.remove();
@@ -36492,6 +36668,7 @@
     scene = creerScene(n);
     n.parentNode.insertBefore(scene, n.nextSibling);
     n.classList.add('sbp-cache-site');
+    poserBarreForum();
     const depart = actuelle && catalogue.pubs[actuelle] && !catalogue.pubs[actuelle].masquee ? actuelle : (src && !(catalogue.pubs[src] && catalogue.pubs[src].masquee) ? src : choisirSuivante());
     if (depart) afficher(depart);
   }
@@ -36769,16 +36946,20 @@
     menu.appendChild(titre);
 
     const blocAuto = el('div');
-    blocAuto.appendChild(ligneCase('Défilement automatique', 'auto', 'Change de pub tout seul'));
-    const sousAuto = el('div', 'sbp-sous');
-    sousAuto.appendChild(ligneCurseur('Image fixe', 'dureeImage', 1, function (x) { return x + ' s'; }, 'Temps d\'affichage d\'une pub qui ne bouge pas'));
-    sousAuto.appendChild(ligneCase('GIF / vidéo : changer à la fin', 'finAnim', 'Décoché : un GIF ou une vidéo reste affiché le même temps qu\'une image fixe'));
-    const sousFin = el('div', 'sbp-sous');
-    sousFin.appendChild(ligneCurseur('Tours', 'tours', 1, function (x) { return x + ' tour' + (x > 1 ? 's' : ''); }, 'Nombre de lectures avant de changer (un GIF de moins de 3 s fait des tours en plus pour durer au moins 3 s)'));
-    sousAuto.appendChild(sousFin);
-    sousAuto.appendChild(ligneCase('Pause au survol', 'pauseSurvol', 'La pub ne change pas tant que la souris est dessus (un GIF / une vidéo finit son tour). Souris seulement : au doigt, un appui passe à la pub suivante et le défilement continue'));
-    sousAuto.appendChild(ligneCase('Barre de progression', 'barre', 'Fine barre sous la pub : temps restant avant la suivante'));
-    blocAuto.appendChild(sousAuto);
+    blocAuto.appendChild(ligneCurseur('Image fixe', 'dureeImage', 1, function (x) { return x + ' s'; }, 'Temps d\'affichage d\'une pub qui ne bouge pas (20 s max, comme le forum)'));
+    blocAuto.appendChild(ligneCase('GIF / vidéo : un seul tour', 'finAnim', 'Coché : la pub change à la fin de son 1er tour. Décoché : même temps qu\'une image fixe'));
+    blocAuto.appendChild(ligneCase('Pause au survol', 'pauseSurvol', 'La barre s\'arrête tant que la souris est sur la pub (un GIF / une vidéo finit son tour). Souris seulement : au doigt, un appui passe à la pub suivante'));
+    const ligneBarre = el('div', 'sbp-ligne');
+    ligneBarre.appendChild(el('span', null, 'Barre de chargement'));
+    const boutonsBarre = [['mini', 'Minimaliste', 'Fine barre sous la pub'], ['forum', 'Forum', 'La barre du forum (même style), menée par Shitbox+']].map(function (o) {
+      const b = el('button', 'sbp-btn', o[1]);
+      b.type = 'button';
+      b.title = o[2];
+      b.addEventListener('click', function () { reglages.barre = o[0]; enregistrerReglages(); poserBarreForum(); majBarre(etat && etat.total ? etat.ecoule / etat.total : 0); majMenu(); });
+      ligneBarre.appendChild(b);
+      return { cle: o[0], b: b };
+    });
+    blocAuto.appendChild(ligneBarre);
     menu.appendChild(blocAuto);
 
     const ligneOrdre = el('div', 'sbp-ligne');
@@ -36831,8 +37012,7 @@
 
     majMenu = function () {
       if (!menu) return;
-      sousAuto.classList.toggle('sbp-grise', !reglages.auto);
-      sousFin.classList.toggle('sbp-grise', !reglages.auto || !reglages.finAnim);
+      boutonsBarre.forEach(function (x) { x.b.classList.toggle('sbp-choisi', x.cle === reglages.barre); });
       boutonsOrdre.forEach(function (x) { x.b.classList.toggle('sbp-choisi', x.cle === reglages.ordre); });
       const total = Object.keys(catalogue.pubs).length;
       const dispo = pubsDisponibles().length;
@@ -49617,7 +49797,7 @@
 })();
   } });
 
-  ECO_MODULES.push({ id: "fil", nom: "Fil+", version: "0.33", desc: "Écrire dans le Fil, pages numérotées, modifier / supprimer ses posts, recherche (Fil et mini-blogs), suivre des blogs (alertes avec Notifications+).", debut: "idle", page: true, reglages: true, code: function (window, history) {
+  ECO_MODULES.push({ id: "fil", nom: "Fil+", version: "0.34", desc: "Écrire dans le Fil, pages numérotées, modifier / supprimer ses posts, recherche (Fil et mini-blogs), suivre des blogs (alertes avec Notifications+).", debut: "idle", page: true, reglages: true, code: function (window, history) {
 (function () {
   'use strict';
 
@@ -49634,7 +49814,8 @@
   const CLE_CIBLE = 'nanachan-fil-plus-cible';
   const CLE_OUVRIR = 'nanachan-fil-plus-ouvrir';
 
-  const DEFAUTS = { ecrire: 'bas', actuAuto: 60, miseEnAvant: true, pastilleFil: true };
+  const DEFAUTS = { ecrire: 'bas', actuAuto: 60, miseEnAvant: true, pastilleFil: true, pseudo: 'profil' };
+  const PSEUDO = ['profil', 'blog'];
   const RETIRES = ['boutonNouveau', 'pseudosLiens', 'recherche', 'intervalle'];
   const CLE_FILTRE = 'nanachan-fil-plus-filtre';
   const ECRIRE = ['bas', 'haut', 'bouton'];
@@ -49656,6 +49837,7 @@
     const r = Object.assign({}, DEFAUTS, o.reglages || {});
     if (ECRIRE.indexOf(r.ecrire) === -1) r.ecrire = DEFAUTS.ecrire;
     if (ACTU.indexOf(+r.actuAuto) === -1) r.actuAuto = DEFAUTS.actuAuto;
+    if (PSEUDO.indexOf(r.pseudo) === -1) r.pseudo = DEFAUTS.pseudo;
     RETIRES.forEach(function (k) { delete r[k]; });
     const suivis = o.suivis && typeof o.suivis === 'object' ? o.suivis : {};
     Object.keys(suivis).forEach(function (k) { if (!suivis[k] || !suivis[k].nom) delete suivis[k]; });
@@ -50397,6 +50579,7 @@
     'a[data-fp-auteur]:hover{text-decoration:underline}',
     'button[data-fp-suivre]{margin-left:8px;font:600 10.5px/16px sans-serif;padding:0 7px;border-radius:9px;border:1px solid currentColor;background:transparent;color:var(--post-date-color,#888);cursor:pointer;opacity:.55;vertical-align:1px;transition:opacity .15s}',
     'button[data-fp-suivre]::after{content:"☆ Suivre"}',
+    '.post-footer > button[data-fp-suivre]{margin-right:auto}',
     'button[data-fp-suivre][aria-pressed="true"]{color:' + COULEUR + ';opacity:.95}',
     'button[data-fp-suivre][aria-pressed="true"]::after{content:"★ Suivi"}',
     '.miniblog-item:hover button[data-fp-suivre],button[data-fp-suivre]:focus-visible{opacity:1}',
@@ -50570,6 +50753,17 @@
     }
   }
 
+  document.addEventListener('click', function (e) {
+    if (d.reglages.pseudo !== 'blog' || e.button || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+    const a = e.target && e.target.closest && e.target.closest('.miniblog-item .post-footer a.author[data-fp-lien]');
+    if (!a) return;
+    const h = a.getAttribute('href');
+    if (!h || !/^\/miniblog\//.test(h)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (!ordre({ a: 'aller', chemin: h })) location.href = h;
+  }, true);
+
   function allerVers(e) {
     if (e.button || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
     const h = this.getAttribute('href');
@@ -50577,22 +50771,37 @@
     e.preventDefault();
   }
 
+  function lienPseudo(auteur) { return d.reglages.pseudo === 'blog' ? '/miniblog/' + encodeURIComponent(auteur) : '/user/' + encodeURIComponent(auteur); }
   function piedItem(it, auteur) {
-    const p = it.querySelector('.post-footer .author');
+    let p = it.querySelector('.post-footer .author');
     if (!p || !auteur) return;
-    const lien = p.querySelector(':scope > a[data-fp-auteur]');
-    {
-      if (!lien || lien.textContent !== auteur) {
+    let lienSite = p.tagName === 'A' ? p : null;
+    if (lienSite) {
+      const vieux = lienSite.querySelector('a[data-fp-auteur]');
+      if (vieux) { lienSite.textContent = '― ' + auteur; }
+      const h = lienPseudo(auteur);
+      if (!lienSite.hasAttribute('data-fp-href-site')) lienSite.setAttribute('data-fp-href-site', lienSite.getAttribute('href') || '');
+      const voulu = d.reglages.pseudo === 'blog' ? h : lienSite.getAttribute('data-fp-href-site') || h;
+      if (lienSite.getAttribute('href') !== voulu) lienSite.setAttribute('href', voulu);
+      const ti = d.reglages.pseudo === 'blog' ? 'Mini-blog de ' + auteur : 'Profil de ' + auteur;
+      if (lienSite.title !== ti) lienSite.title = ti;
+      if (!lienSite.hasAttribute('data-fp-lien')) lienSite.setAttribute('data-fp-lien', '');
+    } else {
+      const lien = p.querySelector(':scope > a[data-fp-auteur]');
+      if (!lien || lien.textContent !== auteur || lien.getAttribute('href') !== lienPseudo(auteur)) {
         const n = document.createTextNode('― ');
         const a = document.createElement('a');
         a.setAttribute('data-fp-auteur', '');
-        a.href = '/miniblog/' + encodeURIComponent(auteur);
-        a.title = 'Mini-blog de ' + auteur;
+        a.href = lienPseudo(auteur);
+        a.title = (d.reglages.pseudo === 'blog' ? 'Mini-blog de ' : 'Profil de ') + auteur;
         a.textContent = auteur;
         a.addEventListener('click', allerVers);
         p.replaceChildren(n, a);
       }
     }
+
+    const boite = lienSite ? lienSite.parentElement : p;
+    p = boite;
     let b = p.querySelector(':scope > button[data-fp-suivre]');
     if (cle(auteur) === cle(moi()) || masqueBlacklist(auteur)) { if (b) b.remove(); return; }
     if (!b) {
@@ -50606,8 +50815,8 @@
         const nom = b.getAttribute('data-fp-pour');
         basculerSuivi(nom);
       });
-      p.appendChild(b);
-    }
+      if (lienSite) lienSite.after(b); else p.appendChild(b);
+    } else if (lienSite && b.previousElementSibling !== lienSite) lienSite.after(b);
     if (b.getAttribute('data-fp-pour') !== auteur) b.setAttribute('data-fp-pour', auteur);
     const s = !!suivi(auteur);
     if (b.getAttribute('aria-pressed') !== String(s)) b.setAttribute('aria-pressed', String(s));
@@ -51217,6 +51426,10 @@
     ]));
     racine.appendChild(ligneChoix('Actualiser le Fil tout seul', 'Les nouveaux posts arrivent en haut du Fil sans recharger la page (page 1, onglet visible). Le bouton ↻ marche toujours.', 'actuAuto', [
       [0, 'Non'], [30, '30 s'], [60, '1 min'], [120, '2 min'], [300, '5 min'],
+    ]));
+    racine.appendChild(ligneChoix('Clic sur le pseudo d\'un post', 'Le « ― pseudo » en bas des posts du Fil', 'pseudo', [
+      ['profil', 'Page de profil', 'Comme le forum'],
+      ['blog', 'Mini-blog', 'Son mini-blog'],
     ]));
 
     racine.appendChild(el('div', 'eco-form-titre', 'Blogs suivis'));
@@ -55001,7 +55214,7 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
 })();
   } });
 
-  ECO_MODULES.push({ id: "profil", nom: "Profil+", version: "0.16", desc: "Carte du membre au survol d'un pseudo, page de profil plus lisible, activité plus longue.", debut: "idle", page: true, reglages: true, code: function (window, history) {
+  ECO_MODULES.push({ id: "profil", nom: "Profil+", version: "0.17", desc: "Carte du membre au survol d'un pseudo, page de profil plus lisible, activité plus longue.", debut: "idle", page: true, reglages: true, code: function (window, history) {
 (function () {
   'use strict';
 
@@ -55478,7 +55691,7 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
       let pseudo = '', texte = false;
       if (x.hasAttribute('data-eco-pseudo')) { pseudo = x.getAttribute('data-eco-pseudo'); texte = true; }
       else if (x.tagName === 'P' && x.parentElement && x.parentElement.classList.contains('hap') && x.closest('a.topic-link')) { pseudo = x.textContent; texte = true; }
-      else if (x.tagName === 'P' && x.classList.contains('author') && x.closest('.post-footer')) { pseudo = x.textContent.replace(/^[\s―—–-]+/, ''); texte = true; }
+      else if (x.classList.contains('author') && x.closest('.post-footer')) { pseudo = x.textContent.replace(/^[\s―—–-]+/, ''); texte = true; }
       else if (x.classList.contains('cp-pseudo') && x.closest('[data-cp-ligne]')) pseudo = x.textContent;
       else if (x.tagName === 'A') {
         const m = RE_PROFIL.exec(x.getAttribute('href') || '');
@@ -55582,10 +55795,14 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
     if (depuis) {
       const f = document.createDocumentFragment();
       f.appendChild(document.createTextNode(dateCourte(depuis) + ' '));
-      f.appendChild(el('small', null, '(' + anciennete(depuis) + ')'));
+
+      const jours = Math.max(1, (Date.now() - depuis.getTime()) / 86400000);
+      const pj = (+u.posts_count || 0) / jours;
+      const txtPj = u.posts_count != null ? ' · ' + pj.toLocaleString('fr-FR', { maximumFractionDigits: pj < 10 ? 1 : 0 }) + ' message' + (pj >= 2 ? 's' : '') + ' / jour' : '';
+      f.appendChild(el('small', null, '(' + anciennete(depuis) + txtPj + ')'));
       ligne('Membre depuis', f);
     } else ligne('Membre depuis', u.signed_up_at);
-    if (u.country) {
+    if (u.country && String(u.country).toUpperCase() !== 'AUCUN') {
       const f = document.createDocumentFragment();
       f.appendChild(document.createTextNode(nomPays(u.country)));
       f.appendChild(el('span', 'famfamfam-flags ' + String(u.country).toLowerCase()));
@@ -57034,6 +57251,8 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
 
   if (ecoReglages.tweaks && 'reglagesEco' in ecoReglages.tweaks) { delete ecoReglages.tweaks.reglagesEco; try { ecoEcrire(ecoReglages); } catch (e) {} }
 
+  if (ecoReglages.tweaks && ecoReglages.tweaks.fixes && 'clocheLive' in ecoReglages.tweaks.fixes) { delete ecoReglages.tweaks.fixes.clocheLive; try { ecoEcrire(ecoReglages); } catch (e) {} }
+
   const ecoActifsAuChargement = {};
   ECO_MODULES.forEach(function (m) { ecoActifsAuChargement[m.id] = ecoReglages.modules[m.id] !== false; });
 
@@ -57472,7 +57691,7 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
     messages: { cle: 'nanachan-messages-plus', champs: [
       { titre: 'Fenêtre de réponse flottante' },
       { k: 'clicNumero', type: 'case', nom: 'Clic sur le n° d\'un post : fenêtre flottante + >>n°', def: true, aide: 'Décoché : le clic sur le n° fait comme le site (descend au formulaire)' },
-      { k: 'taille', type: 'choix', nom: 'Taille de la fenêtre', def: 'auto', options: [{ v: 'auto', nom: '↕ Auto' }, { v: 'libre', nom: '⤡ Libre' }], aide: 'Auto : la fenêtre colle au formulaire (largeur de la barre d\'outils, tout visible, aperçu compris) ; la poignée peut seulement l\'agrandir, le temps de l\'ouverture. Libre : taille tirée à la poignée, gardée d\'une ouverture à l\'autre. Aussi dans la barre de la fenêtre.' },
+      { k: 'taille', type: 'choix', nom: 'Taille de la fenêtre', def: 'auto', options: [{ v: 'auto', nom: '↕ Auto' }, { v: 'libre', nom: '⤡ Libre' }], aide: 'Auto : la fenêtre colle au formulaire (largeur de la barre d\'outils, tout visible, aperçu compris) ; tirer la poignée passe en Libre. Libre : taille tirée à la poignée, gardée d\'une ouverture à l\'autre. Aussi dans la barre de la fenêtre.' },
       { k: 'pastille', type: 'case', nom: 'Pastille ✎ en bas à droite', def: true },
       { k: 'opacitePastille', type: 'curseur', nom: 'Opacité', min: 10, max: 100, pas: 5, unite: '%', def: 40, si: 'pastille', aide: 'Opacité de la pastille quand la fenêtre est fermée' },
       { titre: 'Modification d\'un post' },
@@ -58462,9 +58681,6 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
       bug: 'Un lien du forum en « www.nanachannel.moe » (ou sans www) mène à une autre adresse, où l\'on arrive déconnecté ; et ces liens s\'ouvrent dans un nouvel onglet.',
       fix: 'Tout lien vers le forum, partout dans la page, est ramené sur l\'adresse de l\'onglet au moment du clic (clic, clic molette, Ctrl + clic, clic droit). Clic simple = même onglet (descend au post s\'il est dans la page) ; Ctrl / clic molette : nouvel onglet, connecté. Les liens copiés (« Copier le lien », Ctrl+C) sont aussi corrigés.' },
 
-    { id: 'clocheLive', defaut: true, attr: 'cloche', module: null, nom: 'Position de la cloche sans recharger',
-      bug: 'Mon compte → Personnalisation → « Position du bouton de notifications » (Droite / Gauche) : la cloche ne change de côté qu\'après avoir rechargé la page.',
-      fix: 'La cloche (et 🔔+ de Notifications+) passe de l\'autre côté tout de suite ; la phrase « Rechargez la page après modification » est cachée.' },
     { id: 'rika', defaut: true, attr: 'rika', module: null, nom: 'Page d\'accueil (mise en page)',
       bug: 'L\'image de Rika change de taille avec la fenêtre : énorme, elle passe sur le texte et sort du cadre ; minuscule en fenêtre étroite.',
       fix: 'Haut de l\'accueil en une colonne (titre, écrito, description, Rika, bouton) ; Rika en taille fixe ×2, ou ×1 en fenêtre étroite.' },
@@ -58485,49 +58701,6 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
   }
   ecoAppliquerFixes();
   document.addEventListener('DOMContentLoaded', ecoAppliquerFixes, { once: true });
-
-  function ecoClocheDeplacer() {
-    const h = document.documentElement;
-    const aide = Array.from(document.querySelectorAll('#app p, #app small, #app span')).filter(function (e) {
-      return !e.children.length && /^\s*Rechargez la page après modification\.?\s*$/.test(e.textContent);
-    })[0];
-    if (aide) aide.style.display = ecoFixActif('clocheLive') ? 'none' : '';
-    if (!ecoFixActif('clocheLive')) return;
-    const pos = h.getAttribute('data-notif-pos');
-    const nav = document.querySelector('header nav');
-    if (!nav || (pos !== 'left' && pos !== 'right')) return;
-    const c = nav.querySelector('.notification-container');
-    const titre = nav.querySelector(':scope > .bouton-titre');
-    const droite = Array.from(nav.querySelectorAll(':scope > .nav-droite')).filter(function (d) { return d.querySelector('.bouton-mp, .bouton-params'); })[0];
-    if (!c || !titre || !droite) return;
-    let bloc = c;
-    while (bloc.parentElement && bloc.parentElement.hasAttribute('data-np-enveloppe')) bloc = bloc.parentElement;
-    const aDroite = droite.contains(bloc);
-    if (pos === 'left' && aDroite) {
-      titre.after(bloc);
-      c.style.paddingRight = '15px';
-    } else if (pos === 'right' && !aDroite) {
-      const mp = droite.querySelector(':scope > .bouton-mp');
-      if (mp) droite.insertBefore(bloc, mp); else droite.appendChild(bloc);
-      c.style.paddingRight = '';
-    } else return;
-
-    window.dispatchEvent(new Event('resize'));
-  }
-  (function ecoClocheSurveiller() {
-    const lancer = function () {
-      ecoClocheDeplacer();
-      new MutationObserver(ecoClocheDeplacer).observe(document.documentElement, { attributes: true, attributeFilter: ['data-notif-pos', 'data-eco-sans-fix-cloche'] });
-
-      let prevu = false;
-      new MutationObserver(function () {
-        if (prevu || !/^\/account\/?$/.test(location.pathname)) return;
-        prevu = true;
-        requestAnimationFrame(function () { prevu = false; ecoClocheDeplacer(); });
-      }).observe(document.body, { childList: true, subtree: true });
-    };
-    if (document.body) lancer(); else document.addEventListener('DOMContentLoaded', lancer, { once: true });
-  })();
 
   function ecoAlertesChoix() {
     const t = ecoReglages.tweaks && ecoReglages.tweaks.alertesJs;
@@ -58735,6 +58908,221 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
   document.addEventListener('mouseleave', function () { ecoPseudoSurvol(null); });
   if (document.documentElement) { ecoAppliquerPseudosListe(); ecoAllerPoser(); }
   else document.addEventListener('DOMContentLoaded', function () { ecoAppliquerPseudosListe(); ecoAllerPoser(); }, { once: true });
+
+  function ecoDrapeauxActif() { return !!(ecoReglages.tweaks && ecoReglages.tweaks.drapeauxPays); }
+  const ecoDrap = { obs: null, attente: false, ouvert: null };
+  function ecoDrapStyle() {
+    if (document.getElementById('eco-drapeaux-style')) return;
+    const st = document.createElement('style');
+    st.id = 'eco-drapeaux-style';
+    st.textContent =
+      '[data-eco-drap-cache]{display:none!important}' +
+      '.eco-drap{position:relative;display:block;max-width:100%}' +
+      '.eco-drap-bouton{display:flex!important;align-items:center;justify-content:flex-start;gap:8px;cursor:pointer;text-align:left;width:100%;box-sizing:border-box;-webkit-appearance:none;appearance:none}' +
+
+      '.eco-drap-bouton::after{content:"";margin-left:auto;flex:none;width:16px;height:16px;background:currentColor;' +
+        '-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Cpath d=%27M3.5 6l4.5 4.5L12.5 6%27 fill=%27none%27 stroke=%27black%27 stroke-width=%272%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E") center/contain no-repeat;' +
+        'mask:url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Cpath d=%27M3.5 6l4.5 4.5L12.5 6%27 fill=%27none%27 stroke=%27black%27 stroke-width=%272%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E") center/contain no-repeat}' +
+      '.eco-drap .famfamfam-flags{transform:none!important;margin:0!important;flex:none;box-shadow:0 0 0 1px rgba(0,0,0,.25)}' +
+      '.eco-drap-vide{display:inline-block;width:16px;height:11px;flex:none}' +
+      '.eco-drap-liste{position:absolute;left:0;top:calc(100% + 4px);z-index:1000;min-width:100%;max-height:320px;overflow-y:auto;scrollbar-width:thin;' +
+        'box-sizing:border-box;padding:4px;border-radius:6px;border:1px solid var(--border-color,#373B41);' +
+        'background:var(--nana-background-color,#1a1c1e);color:var(--text-color,#C5C8C6);box-shadow:0 6px 24px rgba(0,0,0,.45)}' +
+      '.eco-drap-item{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:4px;cursor:pointer;white-space:nowrap;font-size:14px}' +
+      '.eco-drap-item:hover,.eco-drap-item[data-sel]{background:var(--button-color,#373B41);color:var(--button-text-color,#C5C8C6)}' +
+      '.eco-drap-item[data-choisi]{font-weight:700}';
+    (document.head || document.documentElement).appendChild(st);
+  }
+
+  function ecoDrapIcone(code) {
+    const c = String(code || '').toLowerCase();
+    if (c && c !== 'aucun') {
+      const f = document.createElement('span');
+      f.className = 'famfamfam-flags ' + c;
+      return f;
+    }
+    const v = document.createElement('span');
+    v.className = 'eco-drap-vide';
+    return v;
+  }
+
+  function ecoDrapVerifier(f) {
+    if (!f.classList.contains('famfamfam-flags') || f.classList.contains('me')) return;
+    const cs = getComputedStyle(f);
+    if (cs.backgroundImage === 'none' || /^0(px|%) 0(px|%)$/.test(cs.backgroundPosition)) { f.className = 'eco-drap-vide'; }
+  }
+  function ecoDrapFermer() {
+    if (ecoDrap.ouvert) { ecoDrap.ouvert.remove(); ecoDrap.ouvert = null; }
+  }
+
+  const ECO_DRAP_PROPS = ['backgroundColor', 'backgroundImage', 'color', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth',
+    'borderTopStyle', 'borderRightStyle', 'borderBottomStyle', 'borderLeftStyle', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor',
+    'borderTopLeftRadius', 'borderTopRightRadius', 'borderBottomLeftRadius', 'borderBottomRightRadius', 'fontFamily', 'fontSize', 'fontWeight',
+    'height', 'paddingTop', 'paddingBottom', 'paddingLeft', 'paddingRight', 'boxShadow', 'marginTop', 'marginBottom'];
+  function ecoDrapCopierStyle(env) {
+    const sel = env._ecoSelect;
+    const bouton = env._ecoBouton;
+    const modele = Array.from(document.querySelectorAll('select')).find(function (x) {
+      return x !== sel && !x.hasAttribute('data-eco-drap-cache') && x.offsetWidth > 0 && !x.closest('[data-eco-ui], .eco-tiroir');
+    }) || sel;
+    const cs = getComputedStyle(modele);
+    let cle = modele.offsetWidth + '|';
+    ECO_DRAP_PROPS.forEach(function (k) { cle += cs[k] + '|'; });
+    if (bouton._ecoStyle === cle) return;
+    bouton._ecoStyle = cle;
+    ECO_DRAP_PROPS.forEach(function (k) { bouton.style[k] = cs[k]; });
+
+    bouton.style.paddingLeft = Math.max(parseFloat(cs.paddingLeft) || 0, 8) + 'px';
+    bouton.style.paddingRight = Math.max(parseFloat(cs.paddingRight) || 0, 6) + 'px';
+    if (modele !== sel) bouton.style.minWidth = Math.max(modele.offsetWidth, 200) + 'px';
+  }
+  function ecoDrapMaj(env) {
+    const sel = env._ecoSelect;
+    const bouton = env._ecoBouton;
+    if (!sel || !bouton) return;
+    ecoDrapCopierStyle(env);
+    const v = sel.value;
+    if (bouton._ecoValeur === v && bouton.childNodes.length) return;
+    bouton._ecoValeur = v;
+    const opt = sel.options[sel.selectedIndex];
+    bouton.textContent = '';
+    const ic = ecoDrapIcone(v);
+    bouton.appendChild(ic);
+    ecoDrapVerifier(ic);
+    bouton.appendChild(document.createTextNode(opt ? opt.textContent.trim() : '—'));
+  }
+  function ecoDrapChoisir(env, valeur) {
+    const sel = env._ecoSelect;
+    ecoDrapFermer();
+    if (!sel || sel.value === valeur) return;
+    sel.value = valeur;
+    sel.dispatchEvent(new Event('input', { bubbles: true }));
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+    ecoDrapMaj(env);
+    env._ecoBouton.focus();
+  }
+  function ecoDrapOuvrir(env) {
+    if (ecoDrap.ouvert && ecoDrap.ouvert.parentElement === env) { ecoDrapFermer(); return; }
+    ecoDrapFermer();
+    const sel = env._ecoSelect;
+    const liste = document.createElement('div');
+    liste.className = 'eco-drap-liste';
+    liste.setAttribute('role', 'listbox');
+    let choisi = null;
+
+    const opts = Array.from(sel.options).sort(function (a, b) {
+      const va = a.value === 'AUCUN' ? 0 : 1, vb = b.value === 'AUCUN' ? 0 : 1;
+      return (va - vb) || a.textContent.trim().localeCompare(b.textContent.trim(), 'fr', { sensitivity: 'base' });
+    });
+    opts.forEach(function (o) {
+      const it = document.createElement('div');
+      it.className = 'eco-drap-item';
+      it.setAttribute('role', 'option');
+      it._ecoValeur = o.value;
+      const ic = ecoDrapIcone(o.value);
+      it.appendChild(ic);
+      it.appendChild(document.createTextNode(o.textContent.trim()));
+      if (o.value === sel.value) { it.setAttribute('data-choisi', ''); it.setAttribute('data-sel', ''); choisi = it; }
+      it.addEventListener('mousedown', function (e) { e.preventDefault(); });
+      it.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); ecoDrapChoisir(env, o.value); });
+      liste.appendChild(it);
+    });
+    env.appendChild(liste);
+    ecoDrap.ouvert = liste;
+    liste.querySelectorAll('.famfamfam-flags').forEach(ecoDrapVerifier);
+    if (choisi) choisi.scrollIntoView({ block: 'center' });
+  }
+  function ecoDrapClavier(e) {
+    const liste = ecoDrap.ouvert;
+    const env = liste && liste.parentElement;
+    if (!liste || !env) return;
+    const items = Array.from(liste.children);
+    let i = items.findIndex(function (x) { return x.hasAttribute('data-sel'); });
+    const marquer = function (n) {
+      items.forEach(function (x) { x.removeAttribute('data-sel'); });
+      if (items[n]) { items[n].setAttribute('data-sel', ''); items[n].scrollIntoView({ block: 'nearest' }); }
+    };
+    if (e.key === 'Escape') { e.preventDefault(); ecoDrapFermer(); env._ecoBouton.focus(); return; }
+    if (e.key === 'ArrowDown') { e.preventDefault(); marquer(Math.min(items.length - 1, i + 1)); return; }
+    if (e.key === 'ArrowUp') { e.preventDefault(); marquer(Math.max(0, i - 1)); return; }
+    if (e.key === 'Enter') { e.preventDefault(); if (items[i]) ecoDrapChoisir(env, items[i]._ecoValeur); return; }
+    if (e.key.length === 1 && /\S/.test(e.key)) {
+      const norm = function (t) { return t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); };
+      const l = norm(e.key);
+      const n = items.length;
+      for (let k = 1; k <= n; k++) {
+        const x = items[(i + k + n) % n];
+        if (norm(x.textContent.trim()).indexOf(l) === 0) { marquer((i + k + n) % n); break; }
+      }
+    }
+  }
+  function ecoDrapPoser() {
+    const actif = ecoDrapeauxActif() && /^\/account(?:\/|$)/.test(location.pathname);
+    document.querySelectorAll('.eco-drap').forEach(function (env) {
+      const sel = env._ecoSelect;
+      if (!actif || !sel || !sel.isConnected) {
+        if (sel) sel.removeAttribute('data-eco-drap-cache');
+        if (ecoDrap.ouvert && env.contains(ecoDrap.ouvert)) ecoDrap.ouvert = null;
+        env.remove();
+      }
+    });
+    if (!actif) return;
+    document.querySelectorAll('select.country-select').forEach(function (sel) {
+      let env = sel._ecoDrap;
+      if (!env || !env.isConnected) {
+        ecoDrapStyle();
+        env = document.createElement('div');
+        env.className = 'eco-drap';
+        const bouton = document.createElement('button');
+        bouton.type = 'button';
+
+        bouton.className = 'eco-drap-bouton';
+        bouton.setAttribute('aria-haspopup', 'listbox');
+        bouton.addEventListener('click', function (e) { e.preventDefault(); ecoDrapOuvrir(env); });
+        bouton.addEventListener('keydown', function (e) {
+          if (!ecoDrap.ouvert && (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); ecoDrapOuvrir(env); return; }
+          ecoDrapClavier(e);
+        });
+        env.appendChild(bouton);
+        env._ecoSelect = sel;
+        env._ecoBouton = bouton;
+        sel._ecoDrap = env;
+        sel.before(env);
+        sel.setAttribute('data-eco-drap-cache', '');
+      }
+      ecoDrapMaj(env);
+    });
+  }
+  function ecoAppliquerDrapeaux() {
+    ecoDrapPoser();
+    if (ecoDrap.obs) return;
+    ecoDrap.obs = new MutationObserver(function () {
+      if (ecoDrap.attente) return;
+      ecoDrap.attente = true;
+      requestAnimationFrame(function () { ecoDrap.attente = false; ecoDrapPoser(); });
+    });
+    ecoDrap.obs.observe(document.documentElement, { childList: true, subtree: true });
+
+    setInterval(function () { document.querySelectorAll('.eco-drap').forEach(ecoDrapMaj); }, 700);
+    document.addEventListener('mousedown', function (e) {
+      if (ecoDrap.ouvert && !ecoDrap.ouvert.parentElement.contains(e.target)) ecoDrapFermer();
+    }, true);
+
+    window.addEventListener('scroll', function (e) {
+      const l = ecoDrap.ouvert;
+      if (!l || (e.target && e.target.nodeType === 1 && l.contains(e.target))) return;
+      let bas = 0;
+      document.querySelectorAll('nav, header').forEach(function (n) {
+        const pos = getComputedStyle(n).position;
+        if (pos !== 'fixed' && pos !== 'sticky') return;
+        const r = n.getBoundingClientRect();
+        if (r.height && r.top <= 1 && r.bottom > bas && r.bottom < window.innerHeight / 2) bas = r.bottom;
+      });
+      if (l.getBoundingClientRect().top < bas) ecoDrapFermer();
+    }, true);
+  }
+  if (document.body) ecoAppliquerDrapeaux();
+  else document.addEventListener('DOMContentLoaded', ecoAppliquerDrapeaux, { once: true });
 
   const ECO_PINGS_IDB = 'nanachan-recherche-plus';
   const ECO_PINGS_AV = 'nanachan-recherche-plus-avatars';
@@ -59007,7 +59395,12 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
   }
   function ecoPingsDemarrer() {
     ecoPingsStyle();
-    document.addEventListener('input', function (e) { if (e.target && e.target.tagName === 'TEXTAREA') ecoPingsVerifier(e.target); }, true);
+    document.addEventListener('input', function (e) {
+      if (!e.target || e.target.tagName !== 'TEXTAREA') return;
+
+      if (e.target !== document.activeElement && ecoPings.champ && ecoPings.champ === document.activeElement) return;
+      ecoPingsVerifier(e.target);
+    }, true);
     document.addEventListener('click', function (e) {
       if (e.target && e.target.tagName === 'TEXTAREA') ecoPingsVerifier(e.target);
       else if (ecoPings.boite && !ecoPings.boite.contains(e.target)) ecoPingsFermer();
@@ -60210,6 +60603,9 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
       { id: 'pseudosListe', groupe: 'page', nom: 'Pseudos cliquables dans la liste des sujets',
         desc: 'Le pseudo de l\'auteur d\'un topic (liste du site, Catalogue et colonne de Pages+, listes de Recherche+) ouvre son profil. Clic sur le pseudo seulement : le reste de la ligne ouvre toujours le topic. Ctrl ou clic molette : nouvel onglet.',
         appliquer: function () { ecoAppliquerPseudosListe(); } },
+      { id: 'drapeauxPays', groupe: 'page', nom: 'Drapeaux dans le choix du pays',
+        desc: 'Mon compte → Pays : le drapeau de chaque pays à gauche de son nom (liste à la place de celle du forum ; lettre tapée = pays suivant qui commence par elle). Le pays n\'est enregistré qu\'avec « Mettre à jour », comme avant.',
+        appliquer: function () { ecoDrapPoser(); } },
       { id: 'sansFab', groupe: 'page', nom: 'Masquer le bouton ✎ du forum',
         desc: 'Bouton rond ✎ du forum en fenêtre étroite (il gêne les flèches de Navigation+ et la pastille de Messages+).',
         appliquer: function () { ecoAppliquerSansFab(); } },
