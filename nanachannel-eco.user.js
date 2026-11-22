@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nanachannel ECO+
 // @namespace    nanachannel-eco-plus
-// @version      0.9.321
+// @version      0.9.359
 // @downloadURL  https://github.com/Pompokov/nanachannel-eco-plus/raw/refs/heads/main/nanachannel-eco.user.js
 // @updateURL    https://github.com/Pompokov/nanachannel-eco-plus/raw/refs/heads/main/nanachannel-eco.user.js
 // @description  Nanachannel ECO+ : tous les modules réunis (Actualisation+, Blacklist+, Citations+, Fil+, Images+, Liens+, Messages+, MP+, Navigation+, Notifications+, Pages+, Profil+, Réactions+, Recherche+, Sondage+, Thèmes+, Uploads+, Vocaroo+, Widgets+), activables dans le menu ECO+ sous la bannière.
@@ -61,8 +61,80 @@
 // ==/UserScript==
 (function () {
   'use strict';
-  const ECO_VERSION = "0.9.321";
+  const ECO_VERSION = "0.9.359";
   const ECO_MODULES = [];
+
+  function ecoMesuresUsine(W, mods, ecoute) {
+    const N = { st: W.setTimeout, si: W.setInterval, raf: W.requestAnimationFrame, ric: W.requestIdleCallback,
+      MO: W.MutationObserver, IO: W.IntersectionObserver, RO: W.ResizeObserver };
+    const horloge = W.performance;
+    let courant = null;
+
+    let actif = true;
+    try { actif = (JSON.parse(W.localStorage.getItem('nanachannel-eco-plus') || '{}') || {}).mesure !== false; } catch (e) {  }
+    function compter(id, d) {
+      const c = mods[id] || (mods[id] = { ms: 0, n: 0, max: 0, lents: 0 });
+      c.ms += d; c.n++;
+      if (d > c.max) c.max = d;
+      if (d >= 50) c.lents++;
+    }
+    function env(id, f) {
+      if (typeof f !== 'function') return f;
+      return function () {
+        if (courant || !actif) return f.apply(this, arguments);
+        courant = id;
+        const t0 = horloge.now();
+        try { return f.apply(this, arguments); } finally { courant = null; compter(id, horloge.now() - t0); }
+      };
+    }
+    function minuteur(nat, id) {
+      if (!nat) return nat;
+      return function () { const a = Array.prototype.slice.call(arguments); a[0] = env(id, a[0]); return nat.apply(W, a); };
+    }
+    function observateur(Nat, id) {
+      if (!Nat) return Nat;
+      const C = function (cb, o) { return new Nat(env(id, cb), o); };
+      C.prototype = Nat.prototype;
+      return C;
+    }
+    W.document.addEventListener('eco-conso-mode', function (e) { actif = e.detail === 'on'; });
+    if (ecoute) {
+      W.document.addEventListener('eco-conso-lire', function () {
+        W.document.dispatchEvent(new W.CustomEvent('eco-conso', { detail: JSON.stringify(mods) }));
+      });
+    }
+    return function (id) {
+      return {
+        setTimeout: minuteur(N.st, id), setInterval: minuteur(N.si, id), requestAnimationFrame: minuteur(N.raf, id),
+        requestIdleCallback: minuteur(N.ric, id), MutationObserver: observateur(N.MO, id),
+        IntersectionObserver: observateur(N.IO, id), ResizeObserver: observateur(N.RO, id),
+      };
+    };
+  }
+
+  const ECO_CONSO = { fond: {}, lancement: {}, depuis: (function () { try { return performance.now(); } catch (e) { return 0; } })() };
+
+  ECO_CONSO.on = (function () { try { return (JSON.parse(localStorage.getItem('nanachannel-eco-plus') || '{}') || {}).mesure !== false; } catch (e) { return true; } })();
+  ECO_CONSO.cumul = 0;
+  ECO_CONSO.depuisOn = ECO_CONSO.depuis;
+  ECO_CONSO.pauseLe = ECO_CONSO.on ? 0 : Date.now();
+  function ecoConsoDuree() { return ECO_CONSO.cumul + (ECO_CONSO.on ? performance.now() - ECO_CONSO.depuisOn : 0); }
+  function ecoConsoRegler(on) {
+    if (on === ECO_CONSO.on) return;
+    const n = performance.now();
+    if (on) { ECO_CONSO.depuisOn = n; ECO_CONSO.pauseLe = 0; } else { ECO_CONSO.cumul += n - ECO_CONSO.depuisOn; ECO_CONSO.pauseLe = Date.now(); }
+    ECO_CONSO.on = on;
+    try { document.dispatchEvent(new CustomEvent('eco-conso-mode', { detail: on ? 'on' : 'off' })); } catch (e) {  }
+  }
+  const ecoMesures = ecoMesuresUsine(window, ECO_CONSO.fond, false);
+
+  ECO_CONSO.longues = { n: 0, ms: 0, max: 0 };
+  try {
+    new PerformanceObserver(function (l) {
+      if (!ECO_CONSO.on) return;
+      l.getEntries().forEach(function (e) { const L = ECO_CONSO.longues; L.n++; L.ms += e.duration; if (e.duration > L.max) L.max = e.duration; });
+    }).observe({ type: 'longtask', buffered: true });
+  } catch (e) { ECO_CONSO.longues = null; }
 
   let ecoDernierAppuiDoigt = false;
   window.addEventListener('pointerdown', function (e) { ecoDernierAppuiDoigt = e.pointerType === 'touch'; }, true);
@@ -72,7 +144,7 @@
     e.stopImmediatePropagation();
   }, true);
 
-  const ECO_DEFAUTS = {"nanachan-blacklist-plus":{"v":4,"reglages":{"mode":"discret","topics":"cache","citations":true,"confirmer":true,"mp":"corbeille","notifications":true,"fil":"discret"},"liste":{}},"nanachan-citations-plus":{"survol":true,"apercuTexte":true,"apercuRepondu":true,"apercuSujet":true,"sansApercuSiLigne":true,"sansApercuSiVisible":true,"delaiSurvol":600,"repondu":true,"indentation":16,"compact":true,"mediasApi":true,"ligneCitation":true,"affCitations":"numeroPseudo","affReponses":"numeroPseudo","couleurRangs":true,"ordreChrono":true,"mentionOP":true,"surlignage":true,"boutonSujet":true,"infosSujet":false,"m446":true},"nanachan-fil-plus":{"v":1,"reglages":{"ecrire":"bas","actuAuto":60,"miseEnAvant":true,"pastilleFil":true,"pseudo":"profil"},"suivis":{}},"nanachan-notifications-plus":{"suivis":{},"exclus":[],"reglages":{"intervalle":60,"suivreFavoris":true,"notifPage":true,"dureeNotif":8,"notifNavigateur":false,"compteurOnglet":true,"styleLigne":"bandeau","tailleCloche":100,"styleCloche":"plus","couleurMessages":"#E0524F","couleurTopics":"#3E8BFF","couleurFavoris":"#F2B526","couleurMp":"#A06BFF","couleurLigneMode":"type","couleurLigne":"#DC3545","dnd":false,"dndForum":true,"dndSuivis":true,"dndFavoris":true,"dndMp":true,"notifMp":true,"dndRecap":true,"couleurFil":"#2EAD7C","dndFil":true,"notifFil":true,"notifForum":true,"notifSuivis":true,"notifFavoris":true,"suivreMesTopics":true,"mesTopics":"creation","m055":true,"histoForum":100}},"nanachan-pages-plus":{"topic":{"mode":"saisie","chargement":"auto","autoDirect":true,"m035":true,"colonne":"partout","colonneRepliee":true,"colonneVue":"compact","colonnePages":"liste","colonneVignette":44,"colonneCarte":120},"liste":{"mode":"pages","chargement":"auto","autoDirect":false,"vue":"liste","carte":"m","taille":170,"gifAnimes":true,"apercu":true,"flouRose":true,"compteChaud":true}},"nanachan-profil-plus":{"liens":true},"nanachan-reactions-plus":{"tailleSticker":32,"tailleEmoji":18,"sansFond":true,"positionNombre":"dessus","rbBarreOutils":false,"hapBarreOutils":false,"boutonPostFavoris":false,"zoomSurvol":true,"zoomTaille":150,"smileyBouton":"","smileyNom":"","iconeFavoris":"","iconeFavorisNom":"","rangeesFavoris":2,"tailleFavoris":0,"vueParDossier":false,"vueFavoris":"moyennes","dossiersReduits":false,"dossiersReduitsEtroit":true,"dossiersVisibles":7,"quickReacs":true,"quickNombre":4,"quickMenuSite":true,"quickFenetre":true,"quickEditeur":true,"quickListe":[]},"nanachan-sondage-plus":{},"nanachan-uploads-plus":{"hote":"noelshack","hoteVideo":"gif","cacherPhotoForum":true,"prio166":true,"gifLossyAuto":true,"webmCompr":false},"nanachan-vocaroo-plus":{"boutonPosts":true},"nanachannel-eco-plus":{"modules":{},"tweaks":{"ecritos":"normal","infobulles":"non","pings":true,"widgetsRetract":true,"pseudosListe":true,"drapeauxPays":true,"sansFab":false},"apparence":"lie"},"nanachannel-eco-plus-sections":{"blacklist|Options":false,"blacklist|Masquer quelqu'un":true,"blacklist|Utilisateurs masqués (0)":false,"blacklist|Modérateurs et admins (chez toi) (0)":false,"blacklist|Affichage":true,"citations|Liens de topic":false,"citations|Citations et réponses":false,"citations|Affichage des citations":true,"fil|Blogs suivis":false,"images|Recherche d'image":true,"eco:tweaks|🩹 Fixes du forum (patchs non officiels)":false,"messages|Édition d'un post":false,"mpplus|Liste des discussions":true,"mpplus|Dépannage":true,"sondage|Sondages dans les messages":true,"sondage|StrawPoll":false,"uploads|Taille des images dans le post":true,"uploads|Hébergeurs tiers activés":true,"vocaroo|Barre Vocaroo+":true,"vocaroo|Envoi":true,"vocaroo|Micro":true,"vocaroo|Posts":true,"eco:tweaks|🏠 Page d'accueilRetouches de la page d'":false,"eco:tweaks|📐 Mise en pagePlacement des éléments du":false,"eco:tweaks|📱 Application NanachannelLe forum s'ins":false,"messages|Modification d'un post":true,"liens|Liens":true,"navigation|Clic et maintien":false,"navigation|Emplacement des flèches":false,"notifications|Dans un topic":false,"notifications|Alertes":false,"notifications|Ne pas déranger":false,"notifications|Fonctionnement":false,"notifications|Apparence":false,"pages|💬 Topics":false,"pages|📋 Liste des sujets":true,"pages|Affichage":false,"profil|Activité":true,"profil|Sections repliées":true,"profil|Page de profil":true,"recherche|Topics":true,"recherche|Appui maintenu sur un tag (= Ctrl + clic":true,"themes|Mes thèmes(0)":true,"eco:tweaks|✎ ÉcritureAides quand tu écris un messag":false}};
+  const ECO_DEFAUTS = {"nanachan-blacklist-plus":{"v":4,"reglages":{"mode":"discret","topics":"cache","citations":true,"confirmer":true,"mp":"corbeille","notifications":true,"fil":"discret"},"liste":{}},"nanachan-citations-plus":{"survol":true,"apercuTexte":true,"apercuRepondu":true,"apercuSujet":true,"sansApercuSiLigne":true,"sansApercuSiVisible":true,"delaiSurvol":600,"repondu":true,"indentation":16,"compact":true,"mediasApi":true,"ligneCitation":true,"affCitations":"numeroPseudo","affReponses":"numeroPseudo","couleurRangs":true,"ordreChrono":true,"mentionOP":true,"surlignage":true,"boutonSujet":true,"infosSujet":false,"m446":true},"nanachan-fil-plus":{"v":1,"reglages":{"ecrire":"bas","actuAuto":60,"miseEnAvant":true,"pastilleFil":true,"pseudo":"profil"},"suivis":{}},"nanachan-notifications-plus":{"suivis":{},"exclus":[],"reglages":{"intervalle":60,"suivreFavoris":true,"notifPage":true,"dureeNotif":8,"notifNavigateur":false,"compteurOnglet":true,"styleLigne":"bandeau","tailleCloche":100,"styleCloche":"plus","couleurMessages":"#E0524F","couleurTopics":"#3E8BFF","couleurFavoris":"#F2B526","couleurMp":"#A06BFF","couleurLigneMode":"type","couleurLigne":"#DC3545","dnd":false,"dndForum":true,"dndSuivis":true,"dndFavoris":true,"dndMp":true,"notifMp":true,"dndRecap":true,"couleurFil":"#2EAD7C","dndFil":true,"notifFil":true,"notifForum":true,"notifSuivis":true,"notifFavoris":true,"suivreMesTopics":true,"mesTopics":"creation","m055":true,"histoForum":100}},"nanachan-pages-plus":{"topic":{"mode":"saisie","chargement":"auto","autoDirect":true,"m035":true,"colonne":"partout","colonneRepliee":true,"colonneVue":"compact","colonnePages":"liste","colonneVignette":44,"colonneCarte":120},"liste":{"mode":"pages","chargement":"auto","autoDirect":false,"vue":"liste","carte":"m","taille":170,"gifAnimes":true,"apercu":true,"flouRose":true,"compteChaud":true,"titresNouveaux":true}},"nanachan-profil-plus":{"liens":true},"nanachan-reactions-plus":{"tailleSticker":32,"tailleEmoji":18,"sansFond":true,"positionNombre":"dessus","rbBarreOutils":false,"hapBarreOutils":false,"boutonPostFavoris":false,"zoomSurvol":true,"zoomTaille":150,"smileyBouton":"","smileyNom":"","iconeFavoris":"","iconeFavorisNom":"","rangeesFavoris":2,"tailleFavoris":0,"vueParDossier":false,"vueFavoris":"moyennes","dossiersReduits":false,"dossiersReduitsEtroit":true,"dossiersVisibles":7,"quickReacs":true,"quickNombre":4,"quickMenuSite":true,"quickFenetre":true,"quickEditeur":true,"quickListe":[]},"nanachan-sondage-plus":{},"nanachan-uploads-plus":{"hote":"noelshack","hoteVideo":"gif","cacherPhotoForum":true,"prio166":true,"gifLossyAuto":true,"webmCompr":false},"nanachan-vocaroo-plus":{"boutonPosts":true},"nanachannel-eco-plus":{"modules":{},"tweaks":{"ecritos":"normal","infobulles":"non","pings":true,"widgetsRetract":true,"pseudosListe":true,"drapeauxPays":true,"sansFab":false,"menuTopic":true,"nouveauxPosts":true},"apparence":"lie"},"nanachannel-eco-plus-sections":{"blacklist|Options":false,"blacklist|Masquer quelqu'un":true,"blacklist|Utilisateurs masqués (0)":false,"blacklist|Modérateurs et admins (chez toi) (0)":false,"blacklist|Affichage":true,"citations|Liens de topic":false,"citations|Citations et réponses":false,"citations|Affichage des citations":true,"fil|Blogs suivis":false,"images|Recherche d'image":true,"eco:tweaks|🩹 Fixes du forum (patchs non officiels)":false,"messages|Édition d'un post":false,"mpplus|Liste des discussions":true,"mpplus|Dépannage":true,"sondage|Sondages dans les messages":true,"sondage|StrawPoll":false,"uploads|Taille des images dans le post":true,"uploads|Hébergeurs tiers activés":true,"vocaroo|Barre Vocaroo+":true,"vocaroo|Envoi":true,"vocaroo|Micro":true,"vocaroo|Posts":true,"eco:tweaks|🏠 Page d'accueilRetouches de la page d'":false,"eco:tweaks|📐 Mise en pagePlacement des éléments du":false,"eco:tweaks|📱 Application NanachannelLe forum s'ins":false,"messages|Modification d'un post":true,"liens|Liens":true,"navigation|Clic et maintien":false,"navigation|Emplacement des flèches":false,"notifications|Dans un topic":false,"notifications|Alertes":false,"notifications|Ne pas déranger":false,"notifications|Fonctionnement":false,"notifications|Apparence":false,"pages|💬 Topics":false,"pages|📋 Liste des sujets":true,"pages|Affichage":false,"profil|Activité":true,"profil|Sections repliées":true,"profil|Page de profil":true,"recherche|Topics":true,"recherche|Appui maintenu sur un tag (= Ctrl + clic":true,"themes|Mes thèmes(0)":true,"eco:tweaks|✎ ÉcritureAides quand tu écris un messag":false}};
   const ECO_DEFAUTS_GM = {"actualisation:actifPageForum": false, "actualisation:tailleNotif": 100};
 
   function ecoCompleter(cible, def) {
@@ -135,7 +207,8 @@
     } catch (e) {  }
   })();
 
-  ECO_MODULES.push({ id: "themes", nom: "Thèmes+", version: "0.17", desc: "Couleurs et noms des thèmes, thèmes perso, partage.", debut: "start", page: true, reglages: true, code: function (window, history) {
+  ECO_MODULES.push({ id: "themes", nom: "Thèmes+", version: "0.19", desc: "Couleurs et noms des thèmes, thèmes perso, partage.", debut: "start", page: true, reglages: true, code: function (window, history) {
+    const { setTimeout, setInterval, requestAnimationFrame, requestIdleCallback, MutationObserver, IntersectionObserver, ResizeObserver } = (typeof ecoMesures === 'function' ? ecoMesures : (window.__ecoMesures || function () { return window; }))("themes");
 (function () {
   'use strict';
 
@@ -910,7 +983,50 @@
     }
 
     let dernierPre = null;
+
+    const CLE_THEME_FORUM = 'nanachan-themes-plus-theme-forum';
+    function rgbDe(v) {
+      const m = /^#([0-9a-f]{3}|[0-9a-f]{6})\b/i.exec(String(v || '').trim());
+      if (!m) return null;
+      let h = m[1];
+      if (h.length === 3) h = h.split('').map(function (c) { return c + c; }).join('');
+      return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+    }
+    function themeSiteProche(p) {
+      const ids = idsSite();
+      if (p.base && ids.indexOf(p.base) !== -1) return p.base;
+      let mieux = null, dMin = Infinity;
+      ids.forEach(function (id) {
+        const cs = couleursSite(id);
+        let d = 0, n = 0;
+        Object.keys(p.couleurs || {}).forEach(function (k) {
+          const a = rgbDe(p.couleurs[k]), b = rgbDe(cs[k]);
+          if (!a || !b) return;
+          d += Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
+          n++;
+        });
+        if (n && d / n < dMin) { dMin = d / n; mieux = id; }
+      });
+      return mieux;
+    }
+    function majThemeForum(p) {
+      try {
+        const garde = JSON.parse(localStorage.getItem(CLE_THEME_FORUM) || 'null');
+        const actuel = localStorage.getItem('theme');
+        if (p) {
+          const id = themeSiteProche(p);
+          if (!id) return;
+          if (!garde) localStorage.setItem(CLE_THEME_FORUM, JSON.stringify({ avant: actuel, pose: id }));
+          else if (garde.pose !== id) localStorage.setItem(CLE_THEME_FORUM, JSON.stringify({ avant: garde.avant, pose: id }));
+          if (actuel !== id) localStorage.setItem('theme', id);
+        } else if (garde) {
+          if (actuel === garde.pose && garde.avant) localStorage.setItem('theme', garde.avant);
+          localStorage.removeItem(CLE_THEME_FORUM);
+        }
+      } catch (e) {  }
+    }
     function memoriserPre(p) {
+      majThemeForum(p);
       genVus = [];
       const css = texteCss(false);
       const vus = genVus;
@@ -1312,7 +1428,9 @@
       appliquer();
       reecrireTout();
       migrerPerso();
-      releverAffiche();
+
+      if (typeof requestIdleCallback === 'function') requestIdleCallback(function () { releverAffiche(); }, { timeout: 6000 });
+      else setTimeout(releverAffiche, 3000);
       finSansTransition();
       new MutationObserver(function () {
         if (prevu) return;
@@ -2541,7 +2659,8 @@
 })();
   } });
 
-  ECO_MODULES.push({ id: "notifications", nom: "Notifications+", version: "0.64", desc: "Cloche 🔔+, topics suivis, favoris, MP, blogs suivis (Fil+) et non-lus.", debut: "start", page: true, reglages: true, code: function (window, history) {
+  ECO_MODULES.push({ id: "notifications", nom: "Notifications+", version: "0.72", desc: "Cloche 🔔+, topics suivis, favoris, MP, blogs suivis (Fil+) et non-lus.", debut: "start", page: true, reglages: true, code: function (window, history) {
+    const { setTimeout, setInterval, requestAnimationFrame, requestIdleCallback, MutationObserver, IntersectionObserver, ResizeObserver } = (typeof ecoMesures === 'function' ? ecoMesures : (window.__ecoMesures || function () { return window; }))("notifications");
 (function () {
   'use strict';
 
@@ -2962,6 +3081,29 @@
     return r.json();
   }
 
+  function ecrireInfosSujets(liste) {
+    if (!liste || !liste.length) return;
+    let t = {};
+    try { t = JSON.parse(localStorage.getItem('eco-topics-infos') || '{}') || {}; } catch (e) { t = {}; }
+    const unites = { s: 1000, sec: 1000, min: 60000, m: 60000, h: 3600000, j: 86400000, d: 86400000, mois: 2592000000, an: 31536000000, ans: 31536000000 };
+    liste.forEach(function (x) {
+      const a = t[x.id] || {};
+      const m = String(x.last_post_delta || '').trim().match(/^(\d+)\s*([a-z]+)/i);
+      const ms = m && unites[m[2].toLowerCase()] ? (+m[1]) * unites[m[2].toLowerCase()] : null;
+      const nouveau = !a.l || (x.last_post_id || 0) >= a.l;
+      Object.assign(a, {
+        t: x.title || a.t, s: x.slug || a.s, a: (x.author && x.author.username) || a.a,
+        g: (x.tags || []).map(function (y) { return y && y.name; }).filter(Boolean),
+        n: x.post_count != null ? x.post_count : a.n, c: x.created_at || a.c,
+        l: Math.max(x.last_post_id || 0, a.l || 0) || a.l,
+        d: ms != null && nouveau ? Date.now() - ms : a.d, k: !!x.is_locked, p: !!x.is_pink, maj: Date.now(),
+      });
+      t[x.id] = a;
+    });
+    const ks = Object.keys(t);
+    if (ks.length > 600) ks.sort(function (x, y) { return (t[x].maj || 0) - (t[y].maj || 0); }).slice(0, ks.length - 600).forEach(function (k) { delete t[k]; });
+    try { localStorage.setItem('eco-topics-infos', JSON.stringify(t)); } catch (e) {  }
+  }
   async function verifier(force) {
     if (verifEnCours) return;
 
@@ -2975,6 +3117,7 @@
       donnees = lire();
       const precedent = donnees.dernierGlobal;
       const vus = [];
+      const infosVues = [];
       for (let n = 1; n <= PAGES_MAX; n++) {
         const p = await page(n);
         const liste = (p && p.results) || [];
@@ -3012,6 +3155,7 @@
         }
         const s = donnees.suivis[t.id];
         if (!s) return;
+        infosVues.push(t);
 
         if (s.vuMemo !== s.vu) { s.luLe = Date.now(); s.vuMemo = s.vu; }
         const avant = nouveaux(s);
@@ -3041,6 +3185,7 @@
           alertes.push({ id: t.id, s: s, k: apres });
         }
       });
+      ecrireInfosSujets(infosVues);
 
       const comptes = {};
       vus.forEach(function (t) { comptes[t.id] = t.post_count; });
@@ -3058,6 +3203,7 @@
           const neufs = posts.filter(function (x) { return x.id > a.s.vu; });
           if (!neufs.length) continue;
           const autres = neufs.filter(function (x) { return x.auteur !== moiV; });
+          a.autres = autres;
           neufs.forEach(function (x) { if (x.auteur === moiV && !estMonPost(a.id, x.id)) { const l = donnees.mesPosts[a.id] = donnees.mesPosts[a.id] || []; l.push(x.id); if (l.length > 30) l.splice(0, l.length - 30); } });
           const dernierAMoi = neufs[neufs.length - 1].auteur === moiV;
           if (!autres.length || (dernierAMoi && R().luQuandJePoste !== false)) {
@@ -3067,6 +3213,9 @@
           } else if (a.k > 0 && autres.length < neufs.length && neufs.length <= 20) a.k = Math.max(1, a.k - (neufs.length - autres.length));
         } catch (e) {  }
       }
+
+      alertes.forEach(function (a) { if (a.k) noterActivite(a.id, a.s, a.autres || [], a.k); });
+      nettoyerActivite();
       donnees.dernierGlobal = maxGlobal;
 
       marquerTopicCourantLu(true);
@@ -3102,7 +3251,24 @@
     minuteurVerif = setInterval(function () { verifier(false); }, Math.max(15, R().intervalle) * 1000);
   }
 
-  const SYNC_FAVORIS_MS = 30 * 60 * 1000;
+  const SYNC_FAVORIS_MS = 3 * 60 * 1000;
+
+  document.addEventListener('eco-favoris-change', function () {
+    changementFavoriLocal = Date.now();
+    setTimeout(function () { synchroniserFavoris(true); if (typeof panneau !== 'undefined' && panneau && ongletPanneau === 'favoris') { try { dessinerPanneau(); } catch (e) {  } } }, 300);
+  });
+  function lireFavorisApi() {
+    return fetch('/nanachannel/me/fav/', { headers: { Accept: 'application/json' }, credentials: 'include' }).then(function (r) {
+      if (!r.ok) throw new Error('me/fav ' + r.status);
+      return r.json();
+    }).then(function (d) {
+      const t = Array.isArray(d) ? d : (d && Array.isArray(d.results) ? d.results : null);
+      if (!t) throw new Error('me/fav : forme inconnue');
+      return t.filter(function (o) { return o && o.id != null; }).map(function (o) {
+        return { id: String(o.id), slug: o.slug || '', titre: o.title || o.titre || '' };
+      });
+    });
+  }
 
   function lireCartesFavoris(doc) {
     return Array.from(doc.querySelectorAll('a.fav-card[href*="/topics/"]')).map(function (a) {
@@ -3119,9 +3285,11 @@
     liste.forEach(function (f) {
       let s = donnees.suivis[f.id];
       if (!s) {
-        if (!R().suivreFavoris || donnees.exclus.indexOf(f.id) !== -1) return;
+
+        if (!R().suivreFavoris) return;
         s = donnees.suivis[f.id] = { depuis: donnees.dernierGlobal || null, vu: null };
       }
+      if (R().suivreFavoris) donnees.exclus = donnees.exclus.filter(function (x) { return x !== f.id; });
       s.favori = true;
       s.titre = f.titre || s.titre;
       s.slug = f.slug || s.slug;
@@ -3131,12 +3299,23 @@
       const s = donnees.suivis[id];
       if (s.favori && !ids.has(id)) {
         s.favori = false;
-        if (!s.manuel) delete donnees.suivis[id];
+        if (!s.moi) delete donnees.suivis[id];
       }
     });
+
+    if (!Array.isArray(donnees.anciensSuivis)) donnees.anciensSuivis = [];
+    Object.keys(donnees.suivis).forEach(function (id) {
+      const s = donnees.suivis[id];
+      if (s.favori || s.moi || ids.has(id)) return;
+      if (!donnees.anciensSuivis.some(function (x) { return String(x.id) === String(id); })) donnees.anciensSuivis.push({ id: String(id), titre: s.titre || '', slug: s.slug || '' });
+      delete donnees.suivis[id];
+    });
+    donnees.anciensSuivis = donnees.anciensSuivis.filter(function (x) { return !ids.has(String(x.id)); });
     donnees.syncFavoris = Date.now();
+    donnees.favorisSite = liste.map(function (f) { return { id: f.id, slug: f.slug, titre: f.titre }; });
     ecrire();
     majAffichage();
+    if (typeof panneau !== 'undefined' && panneau && ongletPanneau === 'favoris') { try { dessinerPanneau(); } catch (e) {  } }
   }
 
   let syncEnCours = false;
@@ -3146,6 +3325,21 @@
   function synchroniserFavoris(force) {
     if (syncEnCours) { if (force) relectureDemandee = true; return Promise.resolve(false); }
     if (!force && (!R().suivreFavoris || Date.now() - donnees.syncFavoris < SYNC_FAVORIS_MS)) return Promise.resolve(false);
+    syncEnCours = true;
+    const debutApi = Date.now();
+    return lireFavorisApi().then(function (l) {
+      syncEnCours = false;
+      if (changementFavoriLocal > debutApi) { setTimeout(function () { synchroniserFavoris(true); }, 300); return false; }
+      appliquerFavoris(l);
+      if (relectureDemandee) { relectureDemandee = false; setTimeout(function () { synchroniserFavoris(true); }, 200); }
+      return true;
+    }, function () {
+      syncEnCours = false;
+      return synchroniserFavorisPage();
+    });
+  }
+
+  function synchroniserFavorisPage() {
     if (/^\/account\/favoris/.test(location.pathname)) {
       const l = lireCartesFavoris(document);
       if (l.length || document.querySelector('.cards-grid')) { appliquerFavoris(l); return Promise.resolve(true); }
@@ -3560,6 +3754,7 @@
   }
 
   function assurerOptionSuivre() {
+    if (true) return;
     const id = idTopicCourant();
     if (!id) return;
     const bouton = boutonMenuTopic();
@@ -3669,16 +3864,153 @@
     document.querySelectorAll('.post-container.post-highlight').forEach(function (p) { p.classList.remove('post-highlight'); });
   }
 
+  function noterActivite(id, s, autres, k) {
+    id = String(id);
+    const act = donnees.activite = donnees.activite && typeof donnees.activite === 'object' ? donnees.activite : {};
+    const a = act[id] && act[id].dernier && s.vu != null && act[id].dernier > s.vu ? act[id] : { noms: [] };
+    const noms = (a.noms || []).slice();
+    autres.forEach(function (x) { if (!x.nom) return; const i = noms.indexOf(x.nom); if (i !== -1) noms.splice(i, 1); noms.unshift(x.nom); });
+    const der = autres.length ? autres[autres.length - 1] : null;
+    act[id] = {
+      t: (der && Date.parse(der.date)) || Date.now(),
+      noms: noms.slice(0, 6),
+      av: (der && der.av) || a.av || '',
+      n: k,
+      dernier: s.dernier || a.dernier || 0,
+    };
+  }
+  function nettoyerActivite() {
+    const act = donnees.activite;
+    if (!act) return;
+    Object.keys(act).forEach(function (id) { if (!donnees.suivis[id]) delete act[id]; });
+    const ks = Object.keys(act).sort(function (x, y) { return (act[y].t || 0) - (act[x].t || 0); });
+    ks.slice(60).forEach(function (k) { delete act[k]; });
+  }
+  let filtreActivite = 'tout';
+
+  const segmentLues = { forum: 'nouvelles', favoris: 'nouvelles' };
+  function dessinerSegmentLues(corps, cle, nNouv, nAnc) {
+    const seg = el('div', 'display:flex;margin:2px 10px 8px;border:1px solid var(--dropdown-menu-border,#373B41);border-radius:8px;overflow:hidden;font-size:12.5px;');
+    seg.setAttribute('data-np-segment-lues', cle);
+    [['nouvelles', 'Nouvelles', nNouv], ['anciennes', 'Anciennes', nAnc]].forEach(function (o, i) {
+      const actif = segmentLues[cle] === o[0];
+      const b = el('button', 'flex:1;border:none;padding:5px 8px;cursor:pointer;font:inherit;' + (i ? 'border-left:1px solid var(--dropdown-menu-border,#373B41);' : '') +
+        (actif ? 'background:var(--button-color,#373B41);color:var(--button-text-color,#C5C8C6);font-weight:bold;' : 'background:transparent;color:inherit;opacity:.75;'),
+        o[1] + (o[2] ? ' (' + o[2] + ')' : ''));
+      b.type = 'button';
+      b.setAttribute('data-np-segment', o[0]);
+      b.setAttribute('aria-pressed', String(actif));
+      b.addEventListener('click', function () { segmentLues[cle] = o[0]; dessinerPanneau(); });
+      seg.appendChild(b);
+    });
+    corps.appendChild(seg);
+  }
+  function videSegment(corps, cle, nAutre, texteVide) {
+    const d = el('div', 'padding:14px 12px;opacity:.75;line-height:1.5;font-size:12.5px;', texteVide);
+    if (segmentLues[cle] === 'nouvelles' && nAutre) {
+      const b = el('button', CSS_BTN + 'margin-top:8px;display:block;', 'Voir les anciennes (' + nAutre + ')');
+      b.type = 'button';
+      b.addEventListener('click', function () { segmentLues[cle] = 'anciennes'; dessinerPanneau(); });
+      d.appendChild(b);
+    }
+    corps.appendChild(d);
+  }
+  function dateForum(ms) {
+    const d = new Date(ms);
+    const z = function (x) { return (x < 10 ? '0' : '') + x; };
+    return z(d.getDate()) + '/' + z(d.getMonth() + 1) + '/' + d.getFullYear() + ' à ' + z(d.getHours()) + ':' + z(d.getMinutes());
+  }
+  function dessinerActiviteFavoris(corps, ids) {
+    const act = donnees.activite || {};
+    if (filtreActivite === 'nonlues') filtreActivite = 'tout';
+    const toutes = ids.map(function (id) { return { id: String(id), s: donnees.suivis[id], a: act[id] || null, k: nouveaux(donnees.suivis[id]) }; })
+      .filter(function (x) { return x.s && (x.a || x.k); });
+    const nNouv = toutes.filter(function (x) { return x.k; }).length;
+    dessinerSegmentLues(corps, 'favoris', nNouv, toutes.length - nNouv);
+    const puces = el('div', 'display:flex;flex-wrap:wrap;gap:5px;padding:2px 10px 8px;');
+    [['tout', 'Tout'], ['mes', 'Mes topics'], ['favoris', 'Favoris']].forEach(function (o) {
+      const b = el('button', 'border:1px solid var(--dropdown-menu-border,#373B41);border-radius:12px;padding:2px 10px;font-size:12px;cursor:pointer;' + (filtreActivite === o[0] ? 'background:var(--button-color,#5C7CAD);color:var(--button-text-color,#fff);border-color:var(--button-color,#5C7CAD);' : 'background:none;color:inherit;'), o[1]);
+      b.type = 'button';
+      b.setAttribute('data-np-filtre-activite', o[0]);
+      b.addEventListener('click', function () { filtreActivite = o[0]; dessinerPanneau(); });
+      puces.appendChild(b);
+    });
+    corps.appendChild(puces);
+    let lignes = toutes.filter(function (x) { return segmentLues.favoris === 'nouvelles' ? x.k : !x.k; });
+    if (filtreActivite === 'mes') lignes = lignes.filter(function (x) { return x.s.moi; });
+    if (filtreActivite === 'favoris') lignes = lignes.filter(function (x) { return x.s.favori; });
+    lignes.sort(function (x, y) { return ((y.a && y.a.t) || 0) - ((x.a && x.a.t) || 0) || (y.s.dernier || 0) - (x.s.dernier || 0); });
+    if (!lignes.length && segmentLues.favoris === 'nouvelles' && filtreActivite === 'tout') {
+      videSegment(corps, 'favoris', toutes.length - nNouv, 'Rien de nouveau dans tes favoris et tes topics.');
+    } else if (!lignes.length) {
+      corps.appendChild(el('div', 'padding:14px 12px;opacity:.75;line-height:1.5;', filtreActivite === 'tout' ? 'Rien pour l\'instant : les nouveaux messages de tes favoris et de tes topics s\'afficheront ici.' : 'Rien ici.'));
+    }
+    lignes.forEach(function (x) {
+      const id = x.id, s = x.s, a = x.a, k = x.k;
+      const ligne = el('a', 'display:flex;align-items:flex-start;gap:10px;padding:8px 12px;color:inherit;text-decoration:none;cursor:pointer;' + (k ? '' : 'opacity:.72;'));
+      ligne.href = lienVersLigne(id, s, k);
+      ligne.setAttribute('data-np-activite', id);
+      if (k) ligne.setAttribute('data-np-non-lu', '');
+      ligne.addEventListener('mouseenter', function () { ligne.style.background = 'var(--dropdown-item-hover,#333)'; });
+      ligne.addEventListener('mouseleave', function () { ligne.style.background = ''; });
+      const noms = (a && a.noms) || [];
+      const av = el('span', 'flex:none;width:38px;height:38px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:15px;' + stylePastille(typeSuivi(s)));
+      if (a && a.av) { const im = document.createElement('img'); im.src = a.av; im.alt = ''; im.style.cssText = 'width:100%;height:100%;object-fit:cover;'; av.appendChild(im); }
+      else av.textContent = noms.length ? noms[0].slice(0, 1).toUpperCase() : (s.moi ? '✎' : '★');
+      ligne.appendChild(av);
+      const txt = el('div', 'flex:1;min-width:0;line-height:1.35;');
+      const l1 = el('div', 'font-size:13.5px;' + (k ? 'font-weight:bold;' : ''));
+      const nb = k === -1 ? 1 : Math.max(k, (a && a.n) || 0, 1);
+      if (noms.length) {
+        l1.appendChild(el('b', '', noms[0]));
+        const plus = Math.max(noms.length - 1, 0);
+        l1.appendChild(document.createTextNode(plus ? ' et ' + plus + ' autre' + (plus > 1 ? 's' : '') + ' ont posté sur ' : ' a posté sur '));
+      } else {
+        l1.appendChild(document.createTextNode((k ? (k === -1 ? 'Du nouveau' : nb + ' nouveau' + (nb > 1 ? 'x messages' : ' message')) : 'Nouveaux messages') + ' sur '));
+      }
+      l1.appendChild(el('b', '', s.titre || ('Topic n° ' + id)));
+      txt.appendChild(l1);
+      const l2 = el('div', 'display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:2px;font-size:11.5px;opacity:.8;');
+
+      if (a && a.dernier) { const pn = el('span', stylePastille(typeSuivi(s)) + 'border-radius:9px;padding:0 6px;font-weight:bold;opacity:1;', 'n° ' + a.dernier); pn.setAttribute('data-np-num', String(a.dernier)); l2.appendChild(pn); }
+      l2.appendChild(el('span', '', a && a.t ? dateForum(a.t) : ''));
+      l2.appendChild(el('span', '', s.moi ? '✎ Ton topic' : '⭐ Favori'));
+      if (k) l2.appendChild(el('span', stylePastille(typeSuivi(s)) + 'border-radius:9px;padding:0 7px;font-weight:bold;opacity:1;', k === -1 ? (a && a.n > 0 ? '+' + a.n : 'nouveau') : '+' + k));
+      txt.appendChild(l2);
+      ligne.appendChild(txt);
+      ligne.addEventListener('click', function (e) {
+        if (e.ctrlKey || e.metaKey || e.shiftKey) { ciblePourNouvelOnglet(id, s, k); return; }
+        e.preventDefault();
+        if (k) ouvrirTopic(id, s); else location.href = lienTopic(id, s);
+      });
+      ligne.addEventListener('auxclick', function (e) { if (e.button === 1) ciblePourNouvelOnglet(id, s, k); });
+      corps.appendChild(ligne);
+    });
+
+    const pied = el('div', 'display:flex;justify-content:center;padding:8px 10px 4px;border-top:1px solid var(--dropdown-menu-border,#373B41);margin-top:4px;');
+    const b = el('button', CSS_BTN, '📁 Ranger mes favoris');
+    b.type = 'button';
+    b.setAttribute('data-np-ranger-favoris', '');
+    b.title = document.documentElement.hasAttribute('data-sbp-favoris') ? 'Ouvre l\'Explorateur des favoris (Widgets+) : dossiers, tri, filtres, retirer…' : 'Page Sujets favoris du forum (Widgets+ → « Favoris : Explorateur » pour ranger en dossiers)';
+    b.addEventListener('click', function () {
+      if (document.documentElement.hasAttribute('data-sbp-favoris')) { fermerPanneau(); document.dispatchEvent(new Event('eco-favoris-explorer')); }
+      else location.href = '/account/favoris';
+    });
+    pied.appendChild(b);
+    corps.appendChild(pied);
+  }
   async function lirePostsAuteurs(idTopic, n) {
-    const rep = await fetch(location.origin + '/nanachannel/topics/' + idTopic + '/posts/?page=' + n, { credentials: 'include', headers: { Accept: 'application/json' } });
+    const rep = await fetch(location.origin + '/nanachannel/topics/' + idTopic + '/posts/?page=' + n, { credentials: 'include', headers: { Accept: 'application/json' }, eco: 'fond' });
     if (!rep.ok) throw new Error('HTTP ' + rep.status);
     const d = await rep.json();
     return (d.results || []).map(function (x) {
-      return { id: Number(x && x.id), auteur: String((x && x.author && x.author.username) || '').trim().toLowerCase() };
+      const au = (x && x.author) || {};
+
+      return { id: Number(x && x.id), auteur: String(au.username || '').trim().toLowerCase(), nom: String(au.username || '').trim(), date: (x && x.created_at) || '', av: au.avatar_url || au.avatar || au.profile_picture || '' };
     }).filter(function (x) { return x.id > 0; }).sort(function (a, b) { return a.id - b.id; });
   }
   async function lirePagePosts(idTopic, n) {
-    const rep = await fetch(location.origin + '/nanachannel/topics/' + idTopic + '/posts/?page=' + n, { credentials: 'include', headers: { Accept: 'application/json' } });
+    const rep = await fetch(location.origin + '/nanachannel/topics/' + idTopic + '/posts/?page=' + n, { credentials: 'include', headers: { Accept: 'application/json' }, eco: 'fond' });
     if (!rep.ok) throw new Error('HTTP ' + rep.status);
     const d = await rep.json();
     const ids = (d.results || []).map(function (x) { return Number(x && x.id); }).filter(function (x) { return x > 0; }).sort(function (a, b) { return a - b; });
@@ -4036,7 +4368,7 @@
   function texteCoupes() {
     const l = [];
     if (R().dndForum !== false) l.push('Forum');
-    if (R().dndSuivis !== false) l.push('Suivis');
+    if (R().dndSuivis !== false) l.push('Mes topics');
     if (R().dndFavoris !== false) l.push('Favoris');
     if (R().dndMp !== false) l.push('MP');
     if (filPresent() && R().dndFil !== false) l.push('Fil');
@@ -4846,7 +5178,7 @@
   let bouton = null;
   let pastille = null;
   let panneau = null;
-  let ongletPanneau = 'suivis';
+  let ongletPanneau = 'favoris';
 
   const CHEMIN_CLOCHE = 'M18 8A6 6 0 0 0 6 8';
   const styleForum = document.createElement('style');
@@ -5283,8 +5615,11 @@
         : etatToutLireForum === 'echec' ? '✗ Échec, réessaie'
         : nb ? nb + ' non lue' + (nb > 1 ? 's' : '') : 'Rien de nouveau');
 
+    if (filtreForum === 'nonlues') filtreForum = 'tout';
+    const nNouvF = histo.filter(notifNonLue).length;
+    dessinerSegmentLues(corps, 'forum', nNouvF, histo.length - nNouvF);
     const filtres = el('div', 'display:flex;flex-wrap:wrap;gap:4px;padding:0 10px 6px;font-size:11px;');
-    [['tout', 'Tout'], ['nonlues', 'Non lues'], ['reponses', 'Réponses'], ['mentions', 'Mentions']].forEach(function (f) {
+    [['tout', 'Tout'], ['reponses', 'Réponses'], ['mentions', 'Mentions']].forEach(function (f) {
       const actif = filtreForum === f[0];
       const b = el('span', 'cursor:pointer;padding:1px 8px;border-radius:9px;border:1px solid var(--dropdown-menu-border,#373B41);' +
         (actif ? 'background:var(--button-color,#373B41);color:var(--button-text-color,#C5C8C6);' : 'opacity:.75;'), f[1]);
@@ -5294,9 +5629,12 @@
     });
     corps.appendChild(filtres);
     const liste = histo.filter(function (n) {
-      return filtreForum === 'nonlues' ? notifNonLue(n) : filtreForum === 'reponses' ? n.is_reply : filtreForum === 'mentions' ? !n.is_reply : true;
+      if ((segmentLues.forum === 'nouvelles') !== !!notifNonLue(n)) return false;
+      return filtreForum === 'reponses' ? n.is_reply : filtreForum === 'mentions' ? !n.is_reply : true;
     });
-    if (!liste.length) {
+    if (!liste.length && segmentLues.forum === 'nouvelles' && filtreForum === 'tout') {
+      videSegment(corps, 'forum', histo.length - nNouvF, 'Aucune nouvelle notification.');
+    } else if (!liste.length) {
       corps.appendChild(el('div', 'padding:14px 12px;opacity:.65;font-size:12px;', histo.length ? 'Aucune notification de ce type.' : 'Aucune notification.'));
     }
     liste.forEach(function (n) {
@@ -5320,7 +5658,12 @@
       l1.appendChild(document.createTextNode(n.is_reply ? ' t\'a répondu sur ' : ' t\'a mentionné sur '));
       l1.appendChild(el('b', '', (n.topic && n.topic.title) || 'un topic'));
       bloc.appendChild(l1);
-      bloc.appendChild(el('span', 'font-size:11px;opacity:.6;', (n.created_at || '') + etiquetteSuiviForum(n)));
+
+      const l2f = el('span', 'display:flex;align-items:center;flex-wrap:wrap;gap:6px;font-size:11px;');
+      const numF = n.post && (n.post.id || (typeof n.post === 'number' ? n.post : null));
+      if (numF) { const pn = el('span', stylePastille('messages') + 'border-radius:9px;padding:0 6px;font-weight:bold;line-height:15px;' + (nouveau ? '' : 'opacity:.75;'), 'n° ' + numF); pn.setAttribute('data-np-num', String(numF)); l2f.appendChild(pn); }
+      l2f.appendChild(el('span', 'opacity:.6;', (n.created_at || '') + etiquetteSuiviForum(n)));
+      bloc.appendChild(l2f);
       a.appendChild(bloc);
       if (nouveau) a.appendChild(el('span', 'flex:none;align-self:center;' + stylePastille('messages') + 'border-radius:9px;padding:1px 7px;font-size:11px;font-weight:bold;', 'nouveau'));
       a.addEventListener('click', function (e) {
@@ -5332,7 +5675,7 @@
       });
       a.addEventListener('auxclick', function (e) { if (e.button === 1) marquerNotifLue(n.id); });
       corps.appendChild(a);
-      if (n.trouAvant && filtreForum === 'tout') {
+      if (n.trouAvant && filtreForum === 'tout' && segmentLues.forum === 'anciennes') {
         corps.appendChild(el('div', 'padding:4px 12px;font-size:11px;opacity:.55;text-align:center;border-top:1px dashed var(--dropdown-menu-border,#373B41);border-bottom:1px dashed var(--dropdown-menu-border,#373B41);margin:2px 0;',
           'Des notifications plus anciennes ont pu être manquées ici (le forum n\'en garde que 10)'));
       }
@@ -5508,7 +5851,14 @@
     const a = document.documentElement.getAttribute('data-notif-pos');
     return a === 'left' ? 'left' : 'right';
   }
+
+  let placementPrevu = false;
   function placerColonnePastilles() {
+    if (placementPrevu) return;
+    placementPrevu = true;
+    requestAnimationFrame(function () { placementPrevu = false; placerColonnePastillesMaintenant(); });
+  }
+  function placerColonnePastillesMaintenant() {
     if (!pastille) return;
     const gauche = coteCloche() === 'left';
 
@@ -5619,6 +5969,7 @@
   }
   function clicDehors(e) {
     if (clicSimule || !panneau || panneau.contains(e.target) || (bouton && bouton.contains(e.target))) return;
+    if (e.target && e.target.closest && e.target.closest('.sbp-fav-menu, .sbp-fav-saisie')) return;
     fermerPanneau();
   }
   function echap(e) { if (e.key === 'Escape') fermerPanneau(); }
@@ -5636,22 +5987,23 @@
     });
     document.body.appendChild(panneau);
     const forumDispo = !!trouverClocheSite();
-    if (ongletPanneau === 'forum' && !forumDispo) ongletPanneau = 'suivis';
+    if (ongletPanneau === 'forum' && !forumDispo) ongletPanneau = 'favoris';
     const parTypeOuv = nouveauxParType();
     if (R().ongletOuverture === 1 && forumDispo) ongletPanneau = 'forum';
-    else if (R().ongletOuverture === 2) ongletPanneau = 'suivis';
+    else if (R().ongletOuverture === 2) ongletPanneau = 'favoris';
     else if (R().ongletOuverture === 3) ongletPanneau = 'favoris';
     else if (R().ongletOuverture === 4) ongletPanneau = 'mp';
     else if (R().ongletOuverture === 5 && filPresent()) ongletPanneau = 'fil';
     else if (R().ongletOuverture === 0) {
       if (forumDispo && compteSite()) ongletPanneau = 'forum';
-      else if (parTypeOuv.topic) ongletPanneau = 'suivis';
+      else if (parTypeOuv.topic) ongletPanneau = 'favoris';
       else if (parTypeOuv.favori) ongletPanneau = 'favoris';
       else if (compteMp()) ongletPanneau = 'mp';
       else if (compteFil()) ongletPanneau = 'fil';
     }
-    if (ongletPanneau === 'reglages') ongletPanneau = forumDispo ? 'forum' : 'suivis';
-    if (ongletPanneau === 'fil' && !filPresent()) ongletPanneau = 'suivis';
+    if (ongletPanneau === 'reglages') ongletPanneau = forumDispo ? 'forum' : 'favoris';
+    if (ongletPanneau === 'fil' && !filPresent()) ongletPanneau = 'favoris';
+    if (ongletPanneau === 'suivis') ongletPanneau = 'favoris';
     dessinerPanneau();
     placerPanneau();
     setTimeout(function () {
@@ -5660,7 +6012,7 @@
     }, 0);
 
     verifier(true);
-    synchroniserFavoris(false);
+    synchroniserFavoris(Date.now() - (donnees.syncFavoris || 0) > 20000);
     verifierMp();
     if (filPresent()) commandeFil({ a: 'veiller' });
   }
@@ -5694,8 +6046,8 @@
     const onglets = [];
     const parType = nouveauxParType();
     if (trouverClocheSite()) onglets.push(['forum', 'Forum', [['messages', compteSite()]]]);
-    onglets.push(['suivis', 'Suivis', [['topic', parType.topic]]]);
-    onglets.push(['favoris', 'Favoris', [['favori', parType.favori]]]);
+
+    onglets.push(['favoris', 'Favoris', [['favori', parType.favori], ['topic', parType.topic]]]);
     onglets.push(['mp', 'MP', [['mp', compteMp()]]]);
     if (filPresent()) onglets.push(['fil', 'Fil', [['fil', compteFil()]]]);
     onglets.push(['reglages', '⚙', []]);
@@ -5706,7 +6058,7 @@
       t.setAttribute('data-np-onglet', o[0]);
       if (o[0] === 'reglages') t.title = 'Réglages';
       if (o[0] === 'suivis') t.title = 'Topics suivis avec « Suivre »';
-      if (o[0] === 'favoris') t.title = 'Tes Sujets favoris';
+      if (o[0] === 'favoris') t.title = 'Tes Sujets favoris et tes topics';
       if (o[0] === 'mp') t.title = 'Messages privés';
       if (o[0] === 'fil') t.title = 'Blogs suivis (Fil+)';
       o[2].forEach(function (x) {
@@ -5949,6 +6301,7 @@
     }, 500);
   }
   function finFavori(id, devientFavori, erreur) {
+    if (devientFavori != null) setTimeout(function () { try { document.dispatchEvent(new Event('eco-favoris-maj')); } catch (e) {  } }, 1500);
     if (erreur) {
       console.warn('[Notifications+] Favori : ' + erreur);
       etatFavoriTopic = 'echec:' + erreur;
@@ -6041,6 +6394,74 @@
     setTimeout(function () { finFavori(id, devient, ''); }, 300);
   }, true);
 
+  function monterVueFavoris(corps, site) {
+    if (!document.documentElement.hasAttribute('data-sbp-favoris')) return false;
+    const infos = {};
+    site.forEach(function (f) {
+      const s = donnees.suivis[f.id];
+      if (!s) return;
+      const k = nouveaux(s);
+      infos[f.id] = {
+        moi: !!s.moi,
+        lien: lienVersLigne(f.id, s, k),
+        badge: k ? (k === -1 ? 'nouveau' : '+' + k) : '',
+        badgeStyle: k ? stylePastille(typeSuivi(s)) + 'border-radius:9px;padding:1px 7px;font-size:11px;font-weight:bold;' : '',
+      };
+    });
+
+    const mes = [];
+    Object.keys(donnees.suivis).forEach(function (id) {
+      const s = donnees.suivis[id];
+      if (!s.moi || site.some(function (f) { return String(f.id) === String(id); })) return;
+      const k = nouveaux(s);
+      mes.push({ id: String(id), titre: s.titre || ('Topic n° ' + id), slug: s.slug || '' });
+      infos[id] = {
+        moi: true, horsFavoris: true,
+        lien: lienVersLigne(id, s, k),
+        badge: k ? (k === -1 ? 'nouveau' : '+' + k) : '',
+        badgeStyle: k ? stylePastille(typeSuivi(s)) + 'border-radius:9px;padding:1px 7px;font-size:11px;font-weight:bold;' : '',
+      };
+    });
+    const z = el('div', '');
+    z.setAttribute('data-favw-contexte', 'panneau');
+    z.setAttribute('data-favw-infos', JSON.stringify(infos));
+    z.setAttribute('data-favw-mes', JSON.stringify(mes));
+    z.addEventListener('eco-favoris-ouvrir', function (ev) {
+      const id = z.getAttribute('data-favw-clic');
+      const s = id && donnees.suivis[id];
+      fermerPanneau();
+      if (s && nouveaux(s)) { ev.preventDefault(); ouvrirTopic(id, s); }
+    });
+    corps.appendChild(z);
+    if (!z.isConnected) { corps.removeChild(z); return false; }
+    z.dispatchEvent(new Event('eco-favoris-monter', { bubbles: true }));
+    if (z.hasAttribute('data-favw-monte')) return true;
+    z.remove();
+    return false;
+  }
+
+  async function retirerFavoriSite(id, titre) {
+    if (!confirm('Retirer « ' + (titre || ('Topic n° ' + id)) + ' » de tes Sujets favoris du site ?')) return;
+    const h = { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
+    const j = jetonCsrf();
+    if (j) h['X-CSRFToken'] = j;
+    const poster = function () {
+      return fetch('/nanachannel/topics/' + encodeURIComponent(id) + '/fav/', { method: 'POST', credentials: 'include', headers: h }).then(function (r) {
+        if (!r.ok) throw new Error('erreur ' + r.status);
+        return r.json().catch(function () { return {}; });
+      }).then(function (d) { return d && d.is_favorite; });
+    };
+    try {
+      let r = await poster();
+      if (r === true) r = await poster();
+      changementFavoriLocal = Date.now();
+      favoriSite[id] = { fav: false, date: Date.now() };
+      try { document.dispatchEvent(new Event('eco-favoris-maj')); } catch (e) {  }
+      setTimeout(function () { synchroniserFavoris(true); }, 400);
+    } catch (e) {
+      alert('Impossible de retirer ce favori : ' + ((e && e.message) || e));
+    }
+  }
   function dessinerSuivis(corps, type) {
 
     const idCourant = idTopicCourant();
@@ -6077,12 +6498,13 @@
       if (favoriOccupe) bf.style.cursor = 'progress';
       bf.addEventListener('click', function () { basculerFavoriTopic(idCourant, fav); });
       l.appendChild(bf);
-      l.appendChild(b);
+
+      if (suivi && !fav && donnees.suivis[idCourant].moi) l.appendChild(b);
       corps.appendChild(l);
     }
 
-    const ids = Object.keys(donnees.suivis).filter(function (id) { return typeSuivi(donnees.suivis[id]) === type; });
-    const nbNouveaux = nouveauxParType()[type];
+    const ids = Object.keys(donnees.suivis).filter(function (id) { const t = typeSuivi(donnees.suivis[id]); return type === 'favori' ? (t === 'favori' || !!donnees.suivis[id].moi) : t === type; });
+    const nbNouveaux = type === 'favori' ? nouveauxParType().favori + nouveauxParType().topic : nouveauxParType()[type];
     barreToutLire(corps, nbNouveaux > 0, function () {
       donnees = lire();
       ids.forEach(marquerSuiviLu);
@@ -6135,6 +6557,31 @@
       lf.appendChild(bf);
       corps.appendChild(lf);
     }
+
+    if (type === 'favori') {
+      dessinerActiviteFavoris(corps, ids);
+      return;
+    }
+    if (type === 'favori-ancien') {
+      const site = donnees.favorisSite || [];
+      if (monterVueFavoris(corps, site)) return;
+      if (!site.length) {
+        corps.appendChild(el('div', 'padding:14px 12px;opacity:.75;line-height:1.5;', 'Aucun Sujet favori. Ajoute des topics à tes favoris sur le forum (menu ⋮ d\'un topic, ou « ☆ Favori » ci-dessus).'));
+        return;
+      }
+
+      const mesHors = ids.filter(function (id) { return donnees.suivis[id].moi && !site.some(function (f) { return String(f.id) === String(id); }); });
+      [['✎ Mes topics', mesHors], ['⭐ Favoris', null]].forEach(function (g) {
+        if (!mesHors.length) return;
+        const sep = el('div', 'display:flex;align-items:center;gap:8px;padding:8px 12px 3px;font-size:11px;font-weight:bold;opacity:.7;');
+        sep.appendChild(el('span', '', g[0] + (g[1] ? ' (' + g[1].length + ')' : '')));
+        sep.appendChild(el('span', 'flex:1;height:0;border-top:1px solid var(--dropdown-menu-border,#373B41);'));
+        corps.appendChild(sep);
+        if (g[1]) g[1].forEach(ligneSuivi);
+      });
+      site.forEach(function (f) { if (donnees.suivis[f.id]) ligneSuivi(f.id); else ligneNonSuivi(f); });
+      return;
+    }
     if (!ids.length) {
       corps.appendChild(el('div', 'padding:14px 12px;opacity:.75;line-height:1.5;', type === 'favori'
         ? 'Aucun Sujet favori suivi. Ajoute des topics à tes favoris sur le forum (ils sont suivis automatiquement) ; voir aussi ⚙ → Suivre mes Sujets favoris.'
@@ -6162,6 +6609,22 @@
       }
       g[1].forEach(ligneSuivi);
     });
+    function ligneNonSuivi(f) {
+      const ligne = el('a', 'display:flex;align-items:center;gap:8px;padding:6px 10px;cursor:pointer;color:inherit;text-decoration:none;opacity:.6;');
+      ligne.href = '/topics/' + f.id + '/' + (f.slug || '');
+      ligne.setAttribute('data-np-ligne-non-suivi', f.id);
+      ligne.addEventListener('mouseenter', function () { ligne.style.background = 'var(--dropdown-item-hover,#333)'; });
+      ligne.addEventListener('mouseleave', function () { ligne.style.background = ''; });
+      ligne.appendChild(el('span', 'flex:none;width:16px;text-align:center;', '☆'));
+      const titre = el('span', 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;', f.titre || ('Topic n° ' + f.id));
+      titre.title = (f.titre || '') + ' — dans tes Sujets favoris du site (pas suivi : ⚙ → Suivre mes Sujets favoris)';
+      ligne.appendChild(titre);
+      const retirerF = el('span', 'flex:none;opacity:.5;padding:0 2px;', '✕');
+      retirerF.title = 'Retirer de tes favoris du site';
+      retirerF.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); retirerFavoriSite(f.id, f.titre); });
+      ligne.appendChild(retirerF);
+      corps.appendChild(ligne);
+    }
     function ligneSuivi(id) {
       const s = donnees.suivis[id];
       const k = nouveaux(s);
@@ -6182,10 +6645,10 @@
         ligne.appendChild(el('span', 'flex:none;' + stylePastille(typeSuivi(s)) + 'border-radius:9px;padding:1px 7px;font-size:11px;font-weight:bold;', k === -1 ? 'nouveau' : '+' + k));
       }
       const retirer = el('span', 'flex:none;opacity:.5;padding:0 2px;', '✕');
-      retirer.title = s.favori ? 'Ne plus suivre (le topic reste dans tes favoris du site)' : 'Ne plus suivre';
+      retirer.title = s.favori && type === 'favori' ? 'Retirer de tes favoris du site' : s.favori ? 'Ne plus suivre (le topic reste dans tes favoris du site)' : 'Ne plus suivre';
       retirer.addEventListener('mouseenter', function () { retirer.style.opacity = '1'; });
       retirer.addEventListener('mouseleave', function () { retirer.style.opacity = '.5'; });
-      retirer.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); nePlusSuivre(id); });
+      retirer.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); if (s.favori && type === 'favori') retirerFavoriSite(id, s.titre); else nePlusSuivre(id); });
       retirer.addEventListener('auxclick', function (e) { e.preventDefault(); e.stopPropagation(); });
       ligne.appendChild(retirer);
       ligne.addEventListener('click', function (e) {
@@ -6396,7 +6859,7 @@
     bTest.addEventListener('click', testerPastilles);
     titre.appendChild(bTest);
     corps.appendChild(titre);
-    [['messages', 'couleurMessages', 'Messages (notifications du forum)'], ['topic', 'couleurTopics', 'Topics suivis'], ['favori', 'couleurFavoris', 'Sujets favoris'], ['mp', 'couleurMp', 'Messages privés']].concat(filPresent() ? [['fil', 'couleurFil', 'Blogs suivis (Fil+)']] : []).forEach(function (x) {
+    [['messages', 'couleurMessages', 'Messages (notifications du forum)'], ['topic', 'couleurTopics', 'Mes topics'], ['favori', 'couleurFavoris', 'Sujets favoris'], ['mp', 'couleurMp', 'Messages privés']].concat(filPresent() ? [['fil', 'couleurFil', 'Blogs suivis (Fil+)']] : []).forEach(function (x) {
       const l = el('div', 'display:flex;align-items:center;gap:8px;padding:3px 12px 3px 24px;');
       const exemple = el('span', stylePastille(x[0]) + 'flex:none;min-width:17px;height:17px;padding:0 4px;box-sizing:border-box;border-radius:9px;font:bold 10px/17px sans-serif;text-align:center;', '3');
       l.appendChild(exemple);
@@ -6450,7 +6913,7 @@
 
     const sync = donnees.syncFavoris ? new Date(donnees.syncFavoris).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : 'jamais';
     const lFav = ligneReglage(corps, 'Suivre mes Sujets favoris', caseACocher('suivreFavoris', function (oui) { if (oui) synchroniserFavoris(true); }),
-      'Synchronisés toutes les 30 min et à chaque visite de la page Sujets favoris (dernière : ' + sync + ').');
+      'Relus toutes les 3 min (onglet affiché) et à l\'ouverture du panneau, comme la page Sujets favoris (dernière : ' + sync + ').');
     const bSync = el('button', CSS_BTN + 'margin-top:4px;', 'Synchroniser maintenant');
     bSync.type = 'button';
     bSync.addEventListener('click', function () {
@@ -6461,13 +6924,60 @@
       });
     });
     lFav.appendChild(bSync);
+
+    if (Array.isArray(donnees.anciensSuivis) && donnees.anciensSuivis.length) {
+      const anc = donnees.anciensSuivis.slice();
+      const la = el('div', 'padding:6px 10px;margin:4px 0;border-radius:6px;background:rgba(242,181,38,.10);border-left:3px solid #F2B526;font-size:12px;line-height:1.4;');
+      la.setAttribute('data-np-anciens-suivis', '');
+      la.appendChild(el('div', '', anc.length + ' topic' + (anc.length > 1 ? 's' : '') + ' que tu suivais avec « Suivre » (fonction retirée : seuls tes favoris du site et tes topics sont suivis) : ' + anc.map(function (x) { return x.titre || ('n° ' + x.id); }).join(', ') + '.'));
+      const ra = el('div', 'display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;');
+      const bAj = el('button', CSS_BTN, '★ Les ajouter à mes favoris du site');
+      bAj.type = 'button';
+      bAj.title = 'Ajoute ces topics à tes Sujets favoris du forum (comme « Ajouter en favoris » du menu ⋮), un par un';
+      const bOu = el('button', CSS_BTN, 'Oublier');
+      bOu.type = 'button';
+      bOu.addEventListener('click', function () { donnees = lire(); donnees.anciensSuivis = []; ecrire(); dessinerPanneau(); });
+      bAj.addEventListener('click', async function () {
+        bAj.disabled = true; bOu.disabled = true;
+        const h = { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
+        const j = jetonCsrf();
+        if (j) h['X-CSRFToken'] = j;
+        const basculer = function (id) {
+          return fetch('/nanachannel/topics/' + encodeURIComponent(id) + '/fav/', { method: 'POST', credentials: 'include', headers: h }).then(function (r) {
+            if (!r.ok) throw new Error('erreur ' + r.status);
+            return r.json().catch(function () { return {}; });
+          }).then(function (d) { return d && d.is_favorite; });
+        };
+        let ok = 0, echecs = 0;
+        for (let i = 0; i < anc.length; i++) {
+          bAj.textContent = 'Ajout… ' + (i + 1) + ' / ' + anc.length;
+          try {
+            let r = await basculer(anc[i].id);
+            if (r === false) r = await basculer(anc[i].id);
+            if (r !== false) ok++; else echecs++;
+          } catch (e) { echecs++; }
+          await new Promise(function (x) { setTimeout(x, 400); });
+        }
+        donnees = lire();
+        if (!echecs) donnees.anciensSuivis = [];
+        ecrire();
+        changementFavoriLocal = Date.now();
+        try { document.dispatchEvent(new Event('eco-favoris-maj')); } catch (e) {  }
+        synchroniserFavoris(true).then(function () { dessinerPanneau(); });
+        if (echecs) alert(ok + ' ajouté' + (ok > 1 ? 's' : '') + ', ' + echecs + ' en échec (connecté au forum ?).');
+      });
+      ra.appendChild(bAj);
+      ra.appendChild(bOu);
+      la.appendChild(ra);
+      corps.appendChild(la);
+    }
     ligneReglage(corps, 'Suivre mes topics', listeTexte('mesTopics', [['non', 'Non'], ['creation', 'À la création'], ['tous', 'Tous mes topics']], function () {
 
       donnees = lire();
       if (R().mesTopics === 'creation') { donnees.mesTopicsDepuis = Date.now(); ecrire(); }
       if (R().mesTopics !== 'non') verifier(true);
     }),
-      'Topics que tu crées suivis automatiquement (groupe « ✎ Mes topics » de l\'onglet Suivis) : alerte à chaque nouveau message des autres, jamais pour les tiens. À la création : chaque nouveau topic, dès sa création. Tous mes topics : aussi les anciens, dès qu\'ils bougent. ✕ sur l\'un d\'eux : plus repris. Les topics déjà suivis le restent.');
+      'Topics que tu crées suivis automatiquement (groupe « ✎ Mes topics » de l\'onglet Favoris) : alerte à chaque nouveau message des autres, jamais pour les tiens. À la création : chaque nouveau topic, dès sa création. Tous mes topics : aussi les anciens, dès qu\'ils bougent. ✕ sur l\'un d\'eux : plus repris. Les topics déjà suivis le restent.');
     if (donnees.exclus.length) {
       const bExclus = el('button', CSS_BTN + 'margin:4px 0 0 6px;', 'Resuivre les topics retirés (' + donnees.exclus.length + ')');
       bExclus.type = 'button';
@@ -6486,7 +6996,7 @@
       'Coupe les notifications et cache les pastilles des types cochés. Le suivi continue : les onglets se remplissent, un récapitulatif s\'affiche à la sortie.');
     const lTypes = el('div', 'display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:5px;');
     lTypes.setAttribute('data-eco-cases-natives', '');
-    [['dndForum', 'Forum'], ['dndSuivis', 'Suivis'], ['dndFavoris', 'Favoris'], ['dndMp', 'MP']].concat(filPresent() ? [['dndFil', 'Fil']] : []).forEach(function (x) {
+    [['dndForum', 'Forum'], ['dndSuivis', 'Mes topics'], ['dndFavoris', 'Favoris'], ['dndMp', 'MP']].concat(filPresent() ? [['dndFil', 'Fil']] : []).forEach(function (x) {
       const lab = el('label', 'display:inline-flex;align-items:center;gap:4px;cursor:pointer;');
       const c = document.createElement('input');
       c.type = 'checkbox';
@@ -6523,8 +7033,8 @@
       conteneur.insertBefore(l, conteneur.children[1] || null);
     }
     const lPour = ligneReglage(corps, 'Alerter pour', el('span', ''),
-      'Forum : quand on te répond ou te mentionne (passe avant l\'alerte d\'un topic suivi pour le même message). Suivis / Favoris : nouveaux messages des autres. MP : message privé reçu (pas quand tu es dans la discussion).' + (filPresent() ? ' Fil : nouveau post d\'un blog suivi.' : ''));
-    cases(lPour, [['notifForum', 'Forum'], ['notifSuivis', 'Suivis'], ['notifFavoris', 'Favoris'], ['notifMp', 'MP']].concat(filPresent() ? [['notifFil', 'Fil']] : []));
+      'Forum : quand on te répond ou te mentionne (passe avant l\'alerte d\'un topic suivi pour le même message). Mes topics / Favoris : nouveaux messages des autres. MP : message privé reçu (pas quand tu es dans la discussion).' + (filPresent() ? ' Fil : nouveau post d\'un blog suivi.' : ''));
+    cases(lPour, [['notifForum', 'Forum'], ['notifSuivis', 'Mes topics'], ['notifFavoris', 'Favoris'], ['notifMp', 'MP']].concat(filPresent() ? [['notifFil', 'Fil']] : []));
     const etat = !('Notification' in window) ? 'non disponible dans ce navigateur'
       : Notification.permission === 'denied' ? 'bloquée par le navigateur (à autoriser dans les réglages du site)'
       : 'visible même quand l\'onglet est en arrière-plan';
@@ -6638,6 +7148,8 @@
   planifier();
   verifier(false);
   setTimeout(function () { synchroniserFavoris(false); }, 4000);
+
+  setInterval(function () { if (!document.hidden) synchroniserFavoris(false); }, 60 * 1000);
   setTimeout(assurerBouton, 3100);
 
   let ecoHoteReglages = null;
@@ -6649,7 +7161,7 @@
   }
   const ecoDessinerPanneauOrigine = dessinerPanneau;
   dessinerPanneau = function () {
-    if (ongletPanneau === 'reglages') ongletPanneau = trouverClocheSite() ? 'forum' : 'suivis';
+    if (ongletPanneau === 'reglages') ongletPanneau = trouverClocheSite() ? 'forum' : 'favoris';
     ecoDessinerPanneauOrigine.apply(this, arguments);
     ecoDessinerReglages();
   };
@@ -6697,7 +7209,8 @@
 })();
   } });
 
-  ECO_MODULES.push({ id: "pages", nom: "Pages+", version: "0.69", desc: "Par pages, saisie du n° de page ; topics sans pages.", debut: "start", page: true, reglages: true, code: function (window, history) {
+  ECO_MODULES.push({ id: "pages", nom: "Pages+", version: "0.79", desc: "Par pages, saisie du n° de page ; topics sans pages.", debut: "start", page: true, reglages: true, code: function (window, history) {
+    const { setTimeout, setInterval, requestAnimationFrame, requestIdleCallback, MutationObserver, IntersectionObserver, ResizeObserver } = (typeof ecoMesures === 'function' ? ecoMesures : (window.__ecoMesures || function () { return window; }))("pages");
 (function () {
   'use strict';
 
@@ -6874,6 +7387,8 @@
 
     ['apercu', 'flouRose', 'compteChaud'].forEach(function (k) { reglages.liste[k] = l[k] !== false; });
 
+    reglages.liste.titresNouveaux = l.titresNouveaux != null ? l.titresNouveaux !== false : (function () { try { const e = JSON.parse(localStorage.getItem('nanachannel-eco-plus') || '{}') || {}; return !(e.tweaks && e.tweaks.nouveauxPosts === false); } catch (er) { return true; } })();
+
     reglages.liste.gifAnimes = true;
 
     const tc = stocke.topic && typeof stocke.topic === 'object' ? stocke.topic : {};
@@ -6931,24 +7446,43 @@
   async function lirePage(u, n) {
     const url = new URL(u.href);
     url.searchParams.set('page', n);
-    const r = await origFetch(url.href, { credentials: 'include', headers: { Accept: 'application/json' } });
+    const r = await origFetch(url.href, { credentials: 'include', headers: { Accept: 'application/json' }, eco: 'site' });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     return r.json();
   }
+
   async function toutCharger(u) {
-    const premiere = await lirePage(u, 1);
-    const taille = premiere.results.length;
-    const total = taille ? Math.ceil(premiere.count / taille) : 1;
-    const pages = [premiere];
-    let suivante = 2;
+    verifierTopic();
+    const cache = topic.cache;
+    const parPage = topic.parPage || 20;
+    const connue = Object.keys(cache).length ? Math.max(1, topic.total || 1) : 1;
+    const lues = {};
+    const d0 = await lirePage(u, connue);
+    lues[connue] = d0.results || [];
+    const taille = d0.next && lues[connue].length ? lues[connue].length : parPage;
+    if (d0.next && lues[connue].length) { topic.parPage = taille; cache[connue] = lues[connue]; }
+    const total = Math.max(1, Math.ceil((d0.count || 0) / taille), connue);
+    topic.total = total;
+    topic.nb = d0.count || 0;
+    publierPagesTopic(total, total, taille);
+    const nums = [];
+    for (let n = 1; n <= total; n++) if (!lues[n] && !(n < total && cache[n])) nums.push(n);
+    let i = 0;
     async function ouvrier() {
-      while (suivante <= total) {
-        const n = suivante++;
-        pages[n - 1] = await lirePage(u, n);
+      while (i < nums.length) {
+        const n = nums[i++];
+        const d = await lirePage(u, n);
+        lues[n] = d.results || [];
+        if (d.next && lues[n].length) cache[n] = lues[n];
       }
     }
-    await Promise.all(Array.from({ length: Math.min(PARALLELE, Math.max(total - 1, 0)) }, ouvrier));
-    return { count: premiere.count, next: null, previous: null, results: pages.flatMap(function (p) { return p.results; }) };
+    await Promise.all(Array.from({ length: Math.min(PARALLELE, nums.length) }, ouvrier));
+    const vus = new Set();
+    const resultats = [];
+    for (let n = 1; n <= total; n++) {
+      (lues[n] || cache[n] || []).forEach(function (m) { if (m && m.id != null) { if (vus.has(m.id)) return; vus.add(m.id); } resultats.push(m); });
+    }
+    return { count: d0.count, next: null, previous: null, results: resultats };
   }
 
   const liste = { chemin: null, pageVoulue: null, page: 1, total: 1, parPage: 20, chargees: 1, chargement: false, nb: 0, bloque: false, lignesAvant: 0, dernierEssai: 0, cache: {}, cleCache: null, vu: false, secours: 0 };
@@ -6975,6 +7509,7 @@
   }
   function retenirListe(d, pageDemandee) {
     if (!d || !Array.isArray(d.results) || modeListe() === 'sans') return;
+    noterListe({ reponse: pageDemandee, premier: d.results[0] && d.results[0].id });
     liste.vu = true;
     liste.page = pageDemandee;
     if (d.next && d.results.length) liste.parPage = d.results.length;
@@ -6992,6 +7527,9 @@
     topic.cache = {};
     topic.chargement = false;
     topic.bloque = false;
+    topic.depuisActu = false;
+    topic.reculer = false;
+    topic.enRecul = false;
   }
   async function lirePageDeuxEssais(u, n) {
     try { return await lirePage(u, n); } catch (e) {
@@ -7001,8 +7539,11 @@
   }
   async function chargerTopic(u) {
     verifierTopic();
-    const p = parseInt(u.searchParams.get('page'), 10) || 1;
+    const p0 = parseInt(u.searchParams.get('page'), 10) || 1;
+    const p = topic.depuisActu ? topic.debut : p0;
+    topic.depuisActu = false;
     if (!topic.debut) { topic.debut = p; topic.k = p; }
+    if (topic.reculer) { topic.reculer = false; if (topic.debut > 1) topic.debut--; }
     if (p > topic.k) topic.k = p;
     if (p < topic.debut) topic.debut = p;
     const nums = [];
@@ -7029,6 +7570,7 @@
     topic.nb = compte;
     topic.total = Math.max(1, Math.ceil(compte / topic.parPage));
     if (topic.k > topic.total) topic.k = topic.total;
+    publierPagesTopic(topic.k, topic.total, topic.parPage);
     const vus = new Set();
     const resultats = [];
     for (let n = topic.debut; n <= topic.k; n++) {
@@ -7043,11 +7585,16 @@
     tp.chemin = location.pathname;
     tp.page = 0; tp.total = 0; tp.siteDerniere = null; tp.pageVoulue = null; tp.depuisActu = false;
   }
+
+  function publierPagesTopic(fin, total, parPage) {
+    try { window.__ecoPagesTopic = { chemin: location.pathname, fin: fin, total: total, parPage: parPage, t: Date.now() }; } catch (e) {  }
+  }
   function retenirTopic(d, page) {
     if (!d || !Array.isArray(d.results)) return;
     if (d.next && d.results.length) tp.parPage = d.results.length;
     tp.page = page;
     tp.total = Math.max(1, Math.ceil((d.count || 0) / tp.parPage), page);
+    publierPagesTopic(page, tp.total, tp.parPage);
     majNavTopic();
     if (tp.defiler) {
       tp.defiler = false;
@@ -7110,14 +7657,16 @@
     const args = Array.prototype.slice.call(arguments);
     const info = { methode: m, url: urlPosts(url), liste: m === 'GET' ? urlListe(url) : null };
     if (info.liste) {
+      const de = info.liste.searchParams.get('page') || '1', avantChemin = liste.chemin;
       verifierChemin();
       if (modeListe() !== 'sans' && liste.pageVoulue) {
         info.liste.searchParams.set('page', liste.pageVoulue);
         args[1] = info.liste.href;
       }
+      noterListe({ requete: de + ' → ' + (info.liste.searchParams.get('page') || '1'), voulue: liste.pageVoulue, cheminRemis: avantChemin !== liste.chemin || undefined, recherche: info.liste.searchParams.get('search') ? 1 : undefined });
       const pageDemandee = parseInt(info.liste.searchParams.get('page'), 10) || 1;
       this.addEventListener('load', function () {
-        try { retenirListe(JSON.parse(this.responseText), pageDemandee); } catch (e) {  }
+        try { const dj = JSON.parse(this.responseText); noterDerniers(dj && dj.results); retenirListe(dj, pageDemandee); } catch (e) {  }
       });
     }
     if (info.url && m === 'GET') tp.urlPosts = info.url.href;
@@ -7149,6 +7698,11 @@
     if (info.url && m === 'GET' && mode() === 'sans' && chargementTopic() !== 'tout') {
       this.addEventListener('loadend', function () { setTimeout(apresChargementTopic, 300); });
     }
+
+    if (info.url && m === 'GET' && mode() === 'sans' && actuPage.sans) {
+      actuPage.sans = false;
+      this.addEventListener('loadend', function () { setTimeout(redescendreApresActu, 300); });
+    }
     this._pp = info;
     return origOpen.apply(this, args);
   };
@@ -7156,6 +7710,9 @@
     const xhr = this;
     const args = arguments;
     const info = xhr._pp;
+
+    const att = info && info.methode === 'GET' && info.url ? chercherPageLien(info.url) : null;
+    if (att) { att.then(function () { proto.send.apply(xhr, args); }); return undefined; }
 
     if (pageASauter(info)) {
       const s0 = saut.actif;
@@ -7165,13 +7722,11 @@
     if (mode() !== 'sans' || !info || info.methode !== 'GET' || !info.url) return origSend.apply(xhr, args);
 
     if (document.documentElement.hasAttribute('data-rp-filtre-topic')) return origSend.apply(xhr, args);
+
     (chargementTopic() === 'tout' ? toutCharger(info.url) : chargerTopic(info.url)).then(function (fusion) {
-      const texte = JSON.stringify(fusion);
-      Object.defineProperty(xhr, 'responseText', { configurable: true, get: function () { return texte; } });
-      Object.defineProperty(xhr, 'response', { configurable: true, get: function () { return xhr.responseType === 'json' ? fusion : texte; } });
+      reponseFactice(xhr, fusion);
     }).catch(function (err) {
       console.warn('[Pages+] échec, affichage normal', err);
-    }).finally(function () {
       try { origSend.apply(xhr, args); } catch (e) {  }
     });
   };
@@ -7343,6 +7898,43 @@
     }, 0);
   }
 
+  const lienPost = { cle: null, promesse: null, faits: {} };
+  function chercherPageLien(u) {
+    const m = (location.hash || '').match(/^#post-(\d+)$/);
+    const t = u.pathname.match(/\/topics\/(\d+)\/posts\/?$/);
+    if (!m || !t) return null;
+    const n = +m[1], id = t[1], cle = id + ':' + n;
+    if (lienPost.faits[cle]) return null;
+    if (lienPost.cle === cle && lienPost.promesse) return lienPost.promesse;
+    if (document.getElementById('post-' + n) || document.documentElement.hasAttribute('data-rp-filtre-topic') || (saut.actif && Date.now() < saut.actif.fin)) { lienPost.faits[cle] = true; return null; }
+    lienPost.cle = cle;
+    lienPost.promesse = trouverPagePost(u, n).then(function (r) {
+      if (r && r.page > 1) saut.actif = { id: id, page: r.page, count: r.count, fin: Date.now() + 20000 };
+    }).catch(function (e) { console.warn('[Pages+] page du message introuvable', e); }).then(function () {
+      lienPost.faits[cle] = true;
+      lienPost.promesse = null;
+    });
+    return lienPost.promesse;
+  }
+  async function trouverPagePost(u, n) {
+    const p1 = await lirePage(u, 1);
+    const ids = function (d) { return (d.results || []).map(function (x) { return +x.id; }).filter(function (x) { return x > 0; }); };
+    const taille = (p1.results || []).length || 20;
+    const total = Math.max(1, Math.ceil((p1.count || 0) / taille));
+    const a = ids(p1);
+    if (total <= 1 || !a.length || n <= Math.max.apply(null, a)) return { page: 1, count: p1.count };
+    let lo = 2, hi = total;
+    while (lo < hi) {
+      const mid = Math.floor((lo + hi) / 2);
+      const b = ids(await lirePage(u, mid));
+      if (!b.length) { hi = mid - 1; continue; }
+      if (n < Math.min.apply(null, b)) hi = mid - 1;
+      else if (n > Math.max.apply(null, b)) lo = mid + 1;
+      else return { page: mid, count: p1.count };
+    }
+    return { page: Math.max(1, Math.min(total, lo)), count: p1.count };
+  }
+
   function pageASauter(info) {
     const s = saut.actif;
     if (!s || !info || info.methode !== 'GET' || !info.url) return false;
@@ -7353,6 +7945,16 @@
   }
 
   const CLE_PAGE_ONGLET = 'nanachan-pages-plus-page-onglet';
+
+  const CLE_DIAG_LISTE = 'nanachan-pages-plus-diag-liste';
+  function noterListe(x) {
+    try {
+      const l = JSON.parse(sessionStorage.getItem(CLE_DIAG_LISTE) || '[]');
+      x.t = new Date().toLocaleTimeString('fr-FR');
+      l.push(x);
+      sessionStorage.setItem(CLE_DIAG_LISTE, JSON.stringify(l.slice(-14)));
+    } catch (e) {  }
+  }
 
   function fixPageActu() { const h = document.documentElement; return !!h && !h.hasAttribute('data-eco-sans-fix-pageactu'); }
   function navigationActualisee() {
@@ -7376,6 +7978,10 @@
         if (dansUnTopic()) {
           if (mode() !== 'sans' && tp.chemin === location.pathname && tp.page > 1) {
             a = { type: 'topic', chemin: location.pathname, page: tp.page, post: premierMessageVisible(), t: Date.now() };
+          } else if (mode() === 'sans' && window.scrollY > 200 && !document.documentElement.hasAttribute('data-rp-filtre-topic')) {
+
+            const post = premierMessageVisible();
+            if (post) a = { type: 'topic-sans', chemin: location.pathname, debut: topic.chemin === location.pathname ? topic.debut : 0, k: topic.chemin === location.pathname ? topic.k : 0, post: post, t: Date.now() };
           }
         } else if (modeListe() !== 'sans' && liste.chemin === location.pathname && liste.vu && liste.page > 1 && !filtreActif()) {
           const rech = document.querySelector('input[placeholder="Rechercher..."]');
@@ -7385,14 +7991,32 @@
       if (a) sessionStorage.setItem(CLE_PAGE_ONGLET, JSON.stringify(a)); else sessionStorage.removeItem(CLE_PAGE_ONGLET);
     } catch (e) {  }
   });
-  const actuPage = { post: null };
+  const actuPage = { post: null, delai: 8000, sans: false };
   (function revenirALaPage() {
     let a = null;
     try { a = JSON.parse(sessionStorage.getItem(CLE_PAGE_ONGLET) || 'null'); sessionStorage.removeItem(CLE_PAGE_ONGLET); } catch (e) { return; }
-    if (!a || a.chemin !== location.pathname || !(a.page > 1) || !navigationActualisee()) return;
+    if (!a || a.chemin !== location.pathname || !navigationActualisee()) return;
     if (Date.now() - (a.t || 0) > 12 * 3600 * 1000) return;
+    if (a.type === 'topic-sans') {
+      if (!dansUnTopic() || mode() !== 'sans' || !/^post-\d+$/.test(a.post || '')) return;
+      if (location.hash && !/^#post-\d+$/.test(location.hash)) return;
+
+      if (chargementTopic() !== 'tout' && a.k > 1) {
+        topic.chemin = location.pathname;
+        topic.debut = Math.max(1, a.debut || 1);
+        topic.k = Math.max(topic.debut, a.k);
+        topic.depuisActu = true;
+      }
+      actuPage.post = a.post;
+      actuPage.delai = 20000;
+      actuPage.sans = true;
+      setTimeout(function () { if (actuPage.sans) { actuPage.sans = false; redescendreApresActu(); } }, 6000);
+      return;
+    }
+    if (!(a.page > 1)) return;
     if (a.type === 'liste') {
-      if (dansUnTopic() || modeListe() === 'sans') return;
+      if (dansUnTopic() || modeListe() === 'sans') { noterListe({ restaure: a.page, refus: dansUnTopic() ? 'topic' : 'sans' }); return; }
+      noterListe({ restaure: a.page, chemin: location.pathname });
       liste.chemin = location.pathname;
       liste.pageVoulue = a.page;
       liste.page = a.page;
@@ -7434,6 +8058,8 @@
     const id = actuPage.post;
     if (!id) return;
     actuPage.post = null;
+    const delai = actuPage.delai || 8000;
+    actuPage.delai = 8000;
     let bouge = false;
     const stop = function () { bouge = true; };
     ['wheel', 'touchstart', 'keydown', 'mousedown'].forEach(function (t) { window.addEventListener(t, stop, { capture: true, passive: true, once: true }); });
@@ -7441,7 +8067,7 @@
     (function suivre() {
       if (bouge) return;
       const el = document.getElementById(id);
-      if (!el) { if (Date.now() - debut < 8000) setTimeout(suivre, 100); return; }
+      if (!el) { if (Date.now() - debut < delai) setTimeout(suivre, 100); return; }
       const barre = document.querySelector('nav.line');
       const h = barre ? Math.max(0, barre.getBoundingClientRect().bottom) : 0;
       defilerNatif({ top: window.scrollY + el.getBoundingClientRect().top - h - 6, left: window.scrollX, behavior: 'instant' });
@@ -7624,7 +8250,7 @@
     tp.page = n;
     tp.defiler = true;
     majNavTopic();
-    cliquer(b);
+    quandActualiserPret(boutonActualiserTopic, cliquer);
   }
   function majNavTopic() {
     document.querySelectorAll('[' + ATTR + '-nav-topic], [' + ATTR + '-borne-site]').forEach(function (n) { if (n._maj) n._maj(); });
@@ -7894,10 +8520,10 @@
   }
 
   document.addEventListener('click', function (e) {
-    if (e.target.closest && e.target.closest('.search-btn')) liste.pageVoulue = null;
+    if (e.target.closest && e.target.closest('.search-btn')) { if (liste.pageVoulue) noterListe({ effacee: 'loupe', vrai: e.isTrusted }); liste.pageVoulue = null; }
   }, true);
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Enter' && e.target && e.target.matches && e.target.matches('input[placeholder="Rechercher..."]')) liste.pageVoulue = null;
+    if (e.key === 'Enter' && e.target && e.target.matches && e.target.matches('input[placeholder="Rechercher..."]')) { if (liste.pageVoulue) noterListe({ effacee: 'entrée', vrai: e.isTrusted }); liste.pageVoulue = null; }
   }, true);
 
   function creerControlesListe(pag) {
@@ -8074,7 +8700,10 @@
     return hote.shadowRoot ? hote.shadowRoot.querySelector('[data-rp-lignes]') : hote;
   }
 
-  const CSS_OMBRE_PP = ':host{display:block;background:var(--list-color,transparent);}[data-pp-lignes] > *{content-visibility:auto;contain-intrinsic-size:auto 56px;}' + CSS_BL_LIGNES;
+  const CSS_OMBRE_PP = ':host{display:block;background:var(--list-color,transparent);}[data-pp-lignes] > *{content-visibility:auto;contain-intrinsic-size:auto 56px;}' + CSS_BL_LIGNES +
+
+    '.topic[data-pp-lu] .titre:not(#pp-z){color:gray!important}.topic[data-pp-nouveaux] .titre:not(#pp-z){color:var(--topic-title-color)!important}.topic:hover .titre:not(#pp-z){color:var(--topic-title-hover-color)!important}' +
+    '.pp-nv{display:inline-block;margin-left:6px;padding:0 6px;border-radius:8px;background:var(--pp-nv,#E0524F);color:#fff;font:700 10.5px/16px Arial,sans-serif;vertical-align:1px;white-space:nowrap}';
   function synchroniserStylesOmbre(sr) {
     const sources = Array.from(document.querySelectorAll('link[rel~="stylesheet"], style'));
     const sig = sources.map(function (el) { return el.tagName === 'LINK' ? el.href : el.textContent.length; }).join('|');
@@ -8265,6 +8894,7 @@
       if (!r.ok) throw new Error('HTTP ' + r.status);
     }
     const d = await r.json();
+    noterDerniers(d.results);
     d.results = horodater(d.results || [], Date.now());
     sans.nb = d.count || sans.nb;
     if (d.next && d.results.length) sans.parPage = d.results.length;
@@ -8758,6 +9388,19 @@
       return !b.closest('.auto-refresh-controle') && !b.closest('[' + ATTR + ']');
     }) || null;
   }
+
+  function quandActualiserPret(trouver, faire) {
+    const b = trouver();
+    if (!b) return false;
+    if (!b.disabled) { faire(b); return true; }
+    let n = 0;
+    const t = setInterval(function () {
+      const x = trouver();
+      if (x && !x.disabled) { clearInterval(t); faire(x); }
+      else if (++n > 50) clearInterval(t);
+    }, 100);
+    return true;
+  }
   let minuteurTopic = null;
   function suivanteTopic(manuel) {
     if (mode() !== 'sans' || chargementTopic() === 'tout' || !dansUnTopic() || topic.chargement) return;
@@ -8780,9 +9423,61 @@
       topic.k = Math.max(topic.debut, topic.k - 1);
       majBarreTopic();
     }, 15000);
-    cliquer(b);
+    quandActualiserPret(boutonActualiserTopic, cliquer);
+  }
+
+  function precedenteTopic() {
+    if (mode() !== 'sans' || chargementTopic() === 'tout' || !dansUnTopic() || topic.chargement || topic.debut <= 1) return;
+    topic.chargement = true;
+    topic.reculer = true;
+    topic.enRecul = true;
+    topic.postsAvant = postsDuTopic().length;
+    majBarreTopic();
+    geler();
+    clearTimeout(minuteurTopic);
+    minuteurTopic = setTimeout(function () {
+      if (!topic.chargement) return;
+      degelerApres(0);
+      topic.chargement = false;
+      topic.reculer = false;
+      topic.enRecul = false;
+      majBarreTopic();
+    }, 15000);
+    quandActualiserPret(boutonActualiserTopic, cliquer);
+  }
+  function majHautTopic() {
+    let h = document.querySelector('[' + ATTR + '-haut-topic]');
+    const voulu = dansUnTopic() && mode() === 'sans' && chargementTopic() !== 'tout' && topic.debut > 1;
+    const posts = voulu ? postsDuTopic() : [];
+    if (!voulu || !posts.length) { if (h) h.remove(); return; }
+    if (!h) {
+      h = document.createElement('div');
+      h.setAttribute(ATTR, '');
+      h.setAttribute(ATTR + '-haut-topic', '');
+      h.style.cssText = 'display:flex;justify-content:center;padding:8px;margin:8px 0;';
+      const b = boutonBas('');
+      b.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); precedenteTopic(); });
+      h.appendChild(b);
+      h._b = b;
+    }
+    let bloc = posts[0];
+    while (bloc.parentElement && !bloc.parentElement.contains(posts[posts.length - 1])) bloc = bloc.parentElement;
+
+    if (h.nextElementSibling !== bloc) bloc.parentElement.insertBefore(h, bloc);
+    ecrireTexte(h._b, topic.enRecul ? 'Chargement de la page ' + (topic.debut - 1) + '…' : '↑ Page précédente (' + (topic.debut - 1) + ' / ' + topic.total + ')');
+    poserDesactive(h._b, topic.chargement);
+    poserStyle(h._b, 'opacity', topic.chargement ? '.5' : '1');
   }
   function apresChargementTopic() {
+    if (topic.chargement && topic.enRecul) {
+      clearTimeout(minuteurTopic);
+      remettreAncre();
+      degelerApres(1500);
+      topic.chargement = false;
+      topic.enRecul = false;
+      majBarreTopic();
+      return;
+    }
     if (topic.chargement) {
       clearTimeout(minuteurTopic);
       remettreAncre();
@@ -8810,7 +9505,7 @@
   }
   function majBarreTopic() {
     let c = document.querySelector('[' + ATTR + '-barre-topic]');
-    if (!dansUnTopic() || mode() !== 'sans' || chargementTopic() === 'tout' || !topic.debut) { if (c) c.remove(); return; }
+    if (!dansUnTopic() || mode() !== 'sans' || chargementTopic() === 'tout' || !topic.debut) { if (c) c.remove(); majHautTopic(); return; }
     if (!c) {
       c = document.createElement('div');
       c.setAttribute(ATTR, '');
@@ -8841,6 +9536,7 @@
       c._auto = auto;
     }
     if (!placerBarreTopic(c)) return;
+    majHautTopic();
     const fini = topic.k >= topic.total;
     const pages = topic.debut > 1 ? 'Pages ' + topic.debut + ' à ' + topic.k : 'Pages affichées : ' + topic.k;
     ecrireTexte(c._etat, topic.chargement ? 'Chargement des messages… (page ' + topic.k + ' / ' + topic.total + ')'
@@ -8951,7 +9647,7 @@
       menu.style.setProperty('border-top', '2px solid rgba(127,127,127,.45)', 'important');
       menu.style.setProperty('border-radius', '0', 'important');
     }
-    if (pourListe) menu.appendChild(sectionVue());
+    if (pourListe) { menu.appendChild(sectionVue()); menu.appendChild(caseTitresNouveaux()); }
     else menu.appendChild(sectionColonne());
     modes.forEach(function (m) {
       const l = document.createElement('label');
@@ -9403,9 +10099,13 @@
   function catalogueVisible() { return catalogueActif() && dansListe(); }
 
   let catMemo = null;
+
+  const CLE_CAT_MINI = 'nanachan-pages-plus-miniatures-cache';
   function memoCat() {
     if (catMemo) return catMemo;
     catMemo = {};
+    try { const o = JSON.parse(localStorage.getItem(CLE_CAT_MINI) || '{}'); if (o && typeof o === 'object') catMemo = o; } catch (e) {  }
+    try { sessionStorage.removeItem('nanachan-pages-plus-catalogue-onglet'); } catch (e) {  }
     return catMemo;
   }
   let catEcriture = null;
@@ -9419,7 +10119,17 @@
         ids.sort(function (a, b) { return (m[a].d || 0) - (m[b].d || 0); });
         ids.slice(0, ids.length - CAT_MAX).forEach(function (k) { delete m[k]; });
       }
-
+      try {
+        const garde = {}, n = Date.now();
+        Object.keys(m).filter(function (k) { return n - (m[k].d || 0) < CAT_DUREE; })
+          .sort(function (a, b) { return (m[b].d || 0) - (m[a].d || 0); }).slice(0, 400).forEach(function (k) {
+            const x = Object.assign({}, m[k]);
+            if (Array.isArray(x.l)) x.l = x.l.slice(0, 3);
+            delete x.t;
+            garde[k] = x;
+          });
+        localStorage.setItem(CLE_CAT_MINI, JSON.stringify(garde));
+      } catch (e) {  }
     }, 800);
   }
 
@@ -9579,7 +10289,31 @@
     catFile.push(id);
     pomperOP();
   }
+
+  let catPatience = null;
+  function majPatienceCat() {
+    const porte = window.__ecoPorte;
+    const a = porte && porte.attente ? porte.attente('eco') : 0;
+    const s = a > 0 ? Math.ceil(a / 1000) : 0;
+    let reste = false;
+    catAttente.forEach(function (cartes) {
+      cartes.forEach(function (c) {
+        if (!c.isConnected || c.hasAttribute('data-op')) return;
+        reste = true;
+        const v = c.querySelector('.vignette');
+        if (!v) return;
+        let p = v.querySelector('.patience');
+        if (!s) { if (p) p.remove(); v.removeAttribute('data-patience'); return; }
+        if (!p) { p = document.createElement('span'); p.className = 'patience'; p.title = 'Le forum limite la lecture des pages (20 par minute) : la miniature arrive dès que possible.'; v.appendChild(p); }
+        if (!v.hasAttribute('data-patience')) v.setAttribute('data-patience', '');
+        const t = s + ' s';
+        if (p.textContent !== t) p.textContent = t;
+      });
+    });
+    if (!reste) { clearInterval(catPatience); catPatience = null; }
+  }
   function pomperOP() {
+    if (!catPatience && catAttente.size) catPatience = setInterval(majPatienceCat, 1000);
     while (catEnCours.size < 3 && catFile.length) {
       const id = catFile.shift();
       catEnCours.add(id);
@@ -9601,8 +10335,9 @@
     let derniere = null;
     for (let i = 0; i < essais.length; i++) {
       try {
-        const r = await origFetch(essais[i], { credentials: 'include', headers: { Accept: 'application/json' } });
-        if (!r.ok) { derniere = new Error('HTTP ' + r.status); continue; }
+
+        const r = await origFetch(essais[i], { credentials: 'include', headers: { Accept: 'application/json' }, eco: 'eco', ecoCache: 600000 });
+        if (!r.ok) { derniere = new Error('HTTP ' + r.status); if (r.status === 429) break; continue; }
         const d = await r.json();
         const posts = (d && (d.results || d.posts)) || (Array.isArray(d) ? d : []);
         if (!posts.length) return { k: CAT_FORMAT, l: [], t: '' };
@@ -9637,13 +10372,21 @@
     '.vignette .icone{width:32px;height:auto;opacity:.75;image-rendering:pixelated;}',
     '.vignette .attente{position:absolute;inset:0;margin:auto;width:22px;height:22px;border-radius:50%;border:3px solid rgba(127,127,127,.35);border-top-color:var(--line-color,#ffb840);animation:tourne .8s linear infinite;}',
     '.carte[data-op] .attente{display:none;}',
+    '.vignette[data-patience] .attente{width:38px;height:38px;border-width:3px;}',
+    '.vignette .patience{position:absolute;inset:0;margin:auto;width:38px;height:38px;display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;letter-spacing:-.2px;opacity:.85;pointer-events:auto;cursor:help;white-space:nowrap;}',
+    '.carte[data-op] .patience{display:none;}',
     '@keyframes tourne{to{transform:rotate(360deg);}}',
     '.lecture{position:absolute;right:4px;bottom:4px;z-index:1;pointer-events:none;font-size:10.5px;font-weight:700;letter-spacing:.3px;line-height:15px;padding:0 5px;border-radius:4px;background:rgba(0,0,0,.7);color:#fff;white-space:nowrap;}',
     '.badges{position:absolute;left:4px;top:4px;display:flex;gap:3px;font-size:13px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.7));}',
     '.infos{font-size:11px;opacity:.85;}',
     '.infos b{font-weight:700;}',
     '.titre{font-weight:700;font-size:12.5px;line-height:1.25;color:var(--topic-title-color,inherit);word-break:break-word;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}',
-    '.carte:hover .titre{color:var(--topic-title-hover-color,var(--topic-title-color,inherit));}',
+
+    '.carte:visited .titre{color:gray;}',
+    '.carte[data-pp-lu] .titre{color:gray!important;}',
+    '.carte[data-pp-nouveaux] .titre{color:var(--topic-title-color,inherit)!important;}',
+    '.carte:hover .titre{color:var(--topic-title-hover-color,var(--topic-title-color,inherit))!important;}',
+    '.pp-nv{display:inline-block;margin-left:5px;padding:0 5px;border-radius:8px;background:var(--pp-nv,#E0524F);color:#fff;font:700 10px/15px Arial,sans-serif;vertical-align:1px;white-space:nowrap;}',
     '.extrait{font-size:11.5px;line-height:1.3;opacity:.8;word-break:break-word;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;}',
     '.extrait:empty{display:none;}',
     '.tags{display:flex;flex-wrap:wrap;justify-content:center;gap:3px;}',
@@ -9786,10 +10529,123 @@
     };
   }
 
+  const DERNIERS = {};
+  function noterDerniers(res) {
+    (res || []).forEach(function (s) { if (s && s.id != null && s.last_post_id) DERNIERS[s.id] = { l: +s.last_post_id, n: +s.post_count || 0 }; });
+  }
+  let lusEcoCache = null, lusEcoT = 0;
+  function lusEco() {
+    if (!lusEcoCache || Date.now() - lusEcoT > 1500) {
+      try { lusEcoCache = JSON.parse(localStorage.getItem('nanachan-navigation-lus') || '{}') || {}; } catch (e) { lusEcoCache = {}; }
+      lusEcoT = Date.now();
+    }
+    return lusEcoCache;
+  }
+  function etatLecture(id) {
+    const d = DERNIERS[id], r = lusEco()[id];
+    if (!d || !r || !r.dernier) return null;
+    return d.l <= r.dernier ? { lu: true } : { nouveaux: true };
+  }
+
+  let notifsForumCache = null, notifsForumT = 0;
+  function notifsForum() {
+    if (notifsForumCache && Date.now() - notifsForumT < 1500) return notifsForumCache;
+    notifsForumT = Date.now();
+    const m = {};
+    try {
+      const f = JSON.parse(localStorage.getItem('nanachan-notifications-plus-forum') || 'null') || {};
+      const l = Array.isArray(f.histo) ? f.histo : Array.isArray(f.liste) ? f.liste : [];
+      const lues = Array.isArray(f.lues) ? f.lues : [];
+      l.forEach(function (n) { if (n && n.is_unred === true && lues.indexOf(n.id) === -1 && n.topic && n.topic.id != null) m[n.topic.id] = (m[n.topic.id] || 0) + 1; });
+    } catch (e) {  }
+    notifsForumCache = m;
+    return m;
+  }
+  function couleurNotif(r, cle, defaut) { const c = r && r[cle]; return /^#[0-9a-f]{6}$/i.test(c || '') ? c : defaut; }
+
+  function pastilleNotif(id, sansFavoris) {
+    relireNotifCol();
+    const d = colNotif.d;
+    const r = d ? d.r : {};
+    const nf = notifsForum()[id];
+    if (nf && !(r.dnd && r.dndForum !== false)) return { texte: '+' + nf, couleur: couleurNotif(r, 'couleurMessages', '#E0524F'), titre: nf + (nf > 1 ? ' réponses / mentions non lues' : ' réponse / mention non lue') + ' (Notifications+)' };
+    if (sansFavoris || !d) return null;
+    const x = DERNIERS[id];
+    const e = etatNotifCol({ id: /^\d+$/.test(String(id)) ? +id : id, post_count: x ? x.n : 0, last_post_id: x ? x.l : 0 });
+    if (!e || !e.n) return null;
+    return { texte: e.n > 0 ? '+' + e.n : 'nouveau', couleur: e.couleur, titre: (e.n > 0 ? e.n + ' nouveau' + (e.n > 1 ? 'x messages' : ' message') : 'Nouveaux messages') + ' (' + (e.favori ? 'favori' : 'ton topic') + ', Notifications+)' };
+  }
+  function poserLecture(el, id, ancre, actif, sansFavoris) {
+    const e = actif ? etatLecture(id) : null;
+    const lu = !!(e && e.lu), nv = !!(e && e.nouveaux);
+    if (el.hasAttribute('data-pp-lu') !== lu) el.toggleAttribute('data-pp-lu', lu);
+    if (el.hasAttribute('data-pp-nouveaux') !== nv) el.toggleAttribute('data-pp-nouveaux', nv);
+    let p = ancre ? ancre.querySelector(':scope > .pp-nv') : null;
+    const pn = actif && ancre ? pastilleNotif(id, sansFavoris) : null;
+    if (!pn) { if (p) p.remove(); return; }
+    if (!p) { p = document.createElement('span'); p.className = 'pp-nv'; p.setAttribute('data-eco-ui', ''); ancre.appendChild(p); }
+    if (p.textContent !== pn.texte) p.textContent = pn.texte;
+    if (p.title !== pn.titre) p.title = pn.titre;
+    if (p.style.background !== pn.couleur) { p.style.background = pn.couleur; p.style.color = texteSurCouleur(pn.couleur); }
+  }
+  function texteSurCouleur(c) {
+    const n = parseInt(String(c).slice(1), 16);
+    const l = (0.299 * (n >> 16 & 255) + 0.587 * (n >> 8 & 255) + 0.114 * (n & 255)) / 255;
+    return l > 0.62 ? '#1a1a1a' : '#fff';
+  }
+  let cssLectureDoc = false;
+  function majLectures() {
+    const actif = !!reglages.liste.titresNouveaux;
+    if (!actif && !majLectures.etait) return;
+    majLectures.etait = actif;
+    if (actif && !cssLectureDoc) {
+      cssLectureDoc = true;
+      const st = document.createElement('style');
+      st.setAttribute('data-pp-lecture', '');
+      st.textContent = '.topic[data-pp-lu] .titre:not(#pp-z){color:gray!important}.topic[data-pp-nouveaux] .titre:not(#pp-z){color:var(--topic-title-color)!important}' +
+        '.topic:hover .titre:not(#pp-z){color:var(--topic-title-hover-color)!important}' +
+        '.pp-nv{display:inline-block;margin-left:6px;padding:0 6px;border-radius:8px;background:#E0524F;color:#fff;font:700 10.5px/16px Arial,sans-serif;vertical-align:1px;white-space:nowrap}';
+      (document.head || document.documentElement).appendChild(st);
+    }
+    const racines = [[document, false]];
+    [[ID_LISTE_PP, false], [ID_CATALOGUE, false], [ID_COLONNE, true]].forEach(function (x) { const h = document.getElementById(x[0]); if (h && h.shadowRoot) racines.push([h.shadowRoot, x[1]]); });
+    racines.forEach(function (rx) {
+      const rc = rx[0];
+      rc.querySelectorAll('.topic').forEach(function (row) {
+        const a = row.querySelector('a.topic-link');
+        const m = a && /\/topics\/(\d+)/.exec(a.getAttribute('href') || '');
+        if (!m) return;
+        poserLecture(row, m[1], row.querySelector('h3.titre'), actif, false);
+      });
+      rc.querySelectorAll('.carte[data-pp-id]').forEach(function (c) { poserLecture(c, c.getAttribute('data-pp-id'), c.querySelector('.titre'), actif, false); });
+
+      rc.querySelectorAll('.l[data-pp-id]').forEach(function (c) { poserLecture(c, c.getAttribute('data-pp-id'), c.querySelector('.t'), actif, rx[1]); });
+    });
+  }
+  setInterval(function () { if (!document.hidden) majLectures(); }, 1200);
+
+  function caseTitresNouveaux() {
+    const lc = document.createElement('label');
+    lc.style.cssText = 'display:flex;gap:7px;align-items:flex-start;padding:6px 4px 2px;cursor:pointer;font-size:12px;';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = !!reglages.liste.titresNouveaux;
+    cb.style.cssText = 'margin:1px 0 0;accent-color:var(--button-color,#FFB840);';
+    const tc = document.createElement('span');
+    tc.innerHTML = '<span></span><br><span style="font-size:10.5px;opacity:.6"></span>';
+    tc.firstChild.textContent = 'Titre rallumé quand il y a de nouveaux posts';
+    tc.lastChild.textContent = 'Le forum grise un topic déjà ouvert, même s\'il y a eu des messages depuis. Ici : gris seulement si tu l\'as lu jusqu\'au bout. Compteur « +N » seulement pour les topics de Notifications+ (réponses / mentions, favoris, tes topics). Un topic jamais lu avec ECO+ reste comme le forum l\'affiche.';
+    cb.addEventListener('change', function () { reglages.liste.titresNouveaux = cb.checked; enregistrer(); majLectures(); });
+    lc.append(cb, tc);
+    lc.setAttribute(ATTR + '-titres-nouveaux', '');
+    return lc;
+  }
+
   const catCartes = new Map();
   function creerCarte(id) {
     const a = document.createElement('a');
     a.className = 'carte';
+    a.setAttribute('data-pp-id', id);
     a._ppId = id;
     a.innerHTML = '<div class="vignette"><span class="attente"></span><span class="badges"></span></div>' +
       '<div class="infos"></div><div class="titre"></div><div class="tags"></div>';
@@ -10384,6 +11240,7 @@
     }
     if (!r || !r.ok) throw new Error('HTTP ' + (r ? r.status : '?'));
     const d = await r.json();
+    noterDerniers(d.results);
     const t0 = Date.now();
     return { res: (d.results || []).map(function (s) { return compactCol(s, t0); }), suite: !!d.next && (d.results || []).length > 0, count: d.count || 0 };
   }
@@ -10697,7 +11554,11 @@
     '.l.cartes .t{font-size:12px;-webkit-line-clamp:3;}',
     '.t{font-weight:700;line-height:1.25;color:var(--topic-title-color,var(--link-color,#81A2BE));word-break:break-word;',
     'display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}',
-    '.l:hover .t{color:var(--topic-title-hover-color,var(--topic-title-color,#81A2BE));}',
+    '.l:visited .t{color:gray;}',
+    '.l[data-pp-lu] .t{color:gray!important;}',
+    '.l[data-pp-nouveaux] .t{color:var(--topic-title-color,var(--link-color,#81A2BE))!important;}',
+    '.l:hover .t{color:var(--topic-title-hover-color,var(--topic-title-color,#81A2BE))!important;}',
+    '.pp-nv{display:inline-block;margin-left:5px;padding:0 5px;border-radius:8px;background:var(--pp-nv,#E0524F);color:#fff;font:700 10px/15px Arial,sans-serif;vertical-align:1px;white-space:nowrap;-webkit-line-clamp:none;}',
     '.s{font-size:11px;opacity:.65;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}',
     '.s b{font-weight:700;}',
     '.s b[data-chaud]{color:#DB3A2A;font-weight:800;opacity:1;}',
@@ -10926,6 +11787,7 @@
     if (!a) { a = document.createElement('a'); col.els.set(s.id, a); }
     a._sig = sig;
     a.className = 'l ' + mode;
+    a.setAttribute('data-pp-id', s.id);
     a.href = '/topics/' + s.id + '/' + (s.slug || '');
     a.title = s.title + (s.author.username ? ' — ' + s.author.username : '');
     a.toggleAttribute('data-rose', !!s.is_pink);
@@ -11256,7 +12118,9 @@
     if (!col.hote) return;
     relireNotifCol();
     const corps = col.corps;
-    const haut0 = corps.scrollTop;
+
+    if (!corps._ppDefil) { corps._ppDefil = true; corps._ppHaut = 0; corps.addEventListener('scroll', function () { corps._ppHaut = corps.scrollTop; }, { passive: true }); }
+    const haut0 = corps._ppHaut;
     const items = pagineCol() && col.source === 'rp' ? col.items.slice((col.page - 1) * COL_PAR_PAGE, col.page * COL_PAR_PAGE)
       : col.source === 'rp' ? col.items.slice(0, col.rendus) : col.items;
     const garder = new Set();
@@ -11264,7 +12128,7 @@
     items.forEach(function (s) { garder.add(s.id); frag.appendChild(ligneCol(s)); });
     col.els.forEach(function (a, id) { if (!garder.has(id)) { a.remove(); col.els.delete(id); } });
     col.lignes.appendChild(frag);
-    corps.scrollTop = haut0;
+    if (haut0) corps.scrollTop = haut0;
     marquerCourantCol(false);
     majEtatCol();
   }
@@ -11542,7 +12406,10 @@
 })();
   } });
 
-  ECO_MODULES.push({ id: "actualisation", nom: "Actualisation+", version: "0.82", desc: "Actualisation automatique des topics et de la liste.", debut: "idle", page: false, reglages: true, code: function (GM_getValue, GM_setValue, GM_info) {
+  ECO_MODULES.push({ id: "actualisation", nom: "Actualisation+", version: "0.88", desc: "Actualisation automatique des topics et de la liste.", debut: "idle", page: false, reglages: true, code: function (GM_getValue, GM_setValue, GM_info) {
+    const { setTimeout, setInterval, requestAnimationFrame, requestIdleCallback, MutationObserver, IntersectionObserver, ResizeObserver } = (typeof ecoMesures === 'function' ? ecoMesures : (window.__ecoMesures || function () { return window; }))("actualisation");
+    let arcDefil = 0;
+    let arcVisibilite = null;
 (function () {
   'use strict';
 
@@ -11627,7 +12494,7 @@
 
   function ecoGlisserEnCours() { return document.documentElement.hasAttribute('data-rp-glisser'); }
 
-  let intervalleSec = GM_getValue('intervalleSec', 15);
+  let intervalleSec = Math.max(3, GM_getValue('intervalleSec', 15));
   let actif = GM_getValue('actif', true);
 
   let actifPageForum = GM_getValue('actifPageForum', true);
@@ -11680,7 +12547,6 @@
   }
 
   function actionRafraichir() {
-    secondesRestantes = intervalleSec;
 
     if (!estActifIci()) return;
     if (estEnTrainDecrire()) return;
@@ -11689,38 +12555,61 @@
       const champ = document.querySelector('input[placeholder="Rechercher..."]');
       const loupe = champ && champ.parentElement && champ.parentElement.querySelector('button.search-btn');
       const prec = document.querySelector('button.page-nav-btn[title="Page précédente"]:not([data-pp])');
-      const page1 = !prec || prec.disabled;
+
+      const ppChamp = document.querySelector('[data-pp-liste] input');
+      const ppPrec = document.querySelector('[data-pp-liste] button.page-nav-btn[title="Page précédente"]');
+      const page1 = ppChamp ? (parseInt(ppChamp.value, 10) || 1) === 1 : ppPrec ? ppPrec.disabled : (!prec || prec.disabled);
       if (loupe && champ && !champ.value.trim() && page1 && !document.documentElement.hasAttribute('data-pp-filtre')) cliquerActualiser(loupe);
       return;
     }
 
-    const bouton = boutonsActualiser().find(function (b) { return b.classList.contains('refresh-text-btn'); });
-    if (bouton) cliquerActualiser(bouton);
+    quandActualiserPret(function () {
+      memoBoutons.t = 0;
+      return boutonsActualiser().find(function (b) { return b.classList.contains('refresh-text-btn'); });
+    }, cliquerActualiser);
+  }
+
+  function quandActualiserPret(trouver, faire) {
+    const b = trouver();
+    if (!b) return false;
+    if (!b.disabled) { faire(b); return true; }
+    let n = 0;
+    const t = setInterval(function () {
+      const x = trouver();
+      if (x && !x.disabled) { clearInterval(t); faire(x); }
+      else if (++n > 50) clearInterval(t);
+    }, 100);
+    return true;
   }
 
   function tickAffichage() {
-    if (estActifIci()) secondesRestantes = Math.max(0, secondesRestantes - 1);
+    if (estActifIci()) secondesRestantes = restantSec();
     mettreAJourAffichage();
   }
 
   function demarrerCycle() {
-    if (minuteur) clearInterval(minuteur);
-    minuteur = setInterval(actionRafraichir, intervalleSec * 1000);
+    if (minuteur) clearTimeout(minuteur);
+    debutCycle = Date.now();
+    secondesRestantes = intervalleSec;
+    minuteur = setTimeout(function () {
+      actionRafraichir();
+      if (minuteur) demarrerCycle();
+    }, intervalleSec * 1000);
+    mettreAJourAffichage();
   }
 
   function demarrer() {
     arreter();
-    secondesRestantes = intervalleSec;
     demarrerCycle();
     chrono = setInterval(tickAffichage, 1000);
-    mettreAJourAffichage();
   }
 
   function arreter() {
-    if (minuteur) clearInterval(minuteur);
+    if (minuteur) clearTimeout(minuteur);
     if (chrono) clearInterval(chrono);
     minuteur = null;
     chrono = null;
+    debutCycle = 0;
   }
 
   function basculerActif(valeur) {
@@ -11735,159 +12624,163 @@
   }
 
   function changerIntervalle(nouvelleValeurSec) {
-    intervalleSec = nouvelleValeurSec;
+    intervalleSec = Math.max(3, nouvelleValeurSec);
     GM_setValue('intervalleSec', intervalleSec);
     if (actif) demarrer();
     else mettreAJourAffichage();
   }
 
   function mettreEnPausePourMenu() {
-    if (minuteur) clearInterval(minuteur);
-    if (chrono) clearInterval(chrono);
-    minuteur = null;
-    chrono = null;
-
-    boutonsActualiser().forEach(function (bouton) {
-      const { chronoSpan } = assurerConteneur(bouton);
-      definirTexteChrono(chronoSpan, '');
-    });
+    arreter();
+    mettreAJourAffichage();
   }
 
   function reprendreApresMenu() {
     if (actif && !minuteur) demarrer();
   }
 
-  const CSS_ROTATION = '';
-  const CSS_ROTATION_REGLAGES = 'button.icon-btn.refresh-btn:has(>.auto-refresh-controle:hover)>svg{transform:none!important;}';
-  const styleRotation = document.createElement('style');
-  styleRotation.textContent = CSS_ROTATION + '.auto-refresh-chrono::before{content:attr(data-chrono);}';
-  (document.head || document.documentElement).appendChild(styleRotation);
+  const SEL_ACTU = 'button.refresh-text-btn, button.refresh-btn';
+  const styleBarre = document.createElement('style');
+  styleBarre.textContent =
+    'button.refresh-text-btn,button.refresh-btn{position:relative;overflow:hidden;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}' +
 
-  const styleRotation2 = document.createElement('style');
-  styleRotation2.textContent = CSS_ROTATION_REGLAGES;
-  (document.head || document.documentElement).appendChild(styleRotation2);
+    '.arc-barre{position:absolute;left:0;right:0;bottom:0;height:3px;z-index:1;pointer-events:none;display:none}' +
+    'html[data-arc-auto] .arc-barre{display:block}' +
+    '.arc-barre>span{display:block;height:100%;width:100%;background:currentColor;opacity:.95;transform-origin:0 50%;transform:scaleX(0)}' +
 
-  function assurerConteneur(bouton) {
+    'button.refresh-text-btn:disabled>.arc-barre{display:none!important}' +
+    'button.refresh-text-btn:disabled{pointer-events:none}';
+  (document.head || document.documentElement).appendChild(styleBarre);
 
-    if (!bouton._nanaPositionVue) {
-      bouton._nanaPositionVue = true;
-      if (getComputedStyle(bouton).position === 'static') bouton.style.position = 'relative';
+  let debutCycle = 0;
+  function enMarche() { return !!minuteur && estActifIci(); }
+  function restantSec() { return Math.max(0, Math.ceil((debutCycle + intervalleSec * 1000 - Date.now()) / 1000)); }
+
+  function assurerBarre(bouton) {
+    let b = bouton.querySelector(':scope > .arc-barre');
+    if (!b) {
+      b = document.createElement('span');
+      b.className = 'arc-barre auto-refresh-controle';
+      b.setAttribute('aria-hidden', 'true');
+      b.appendChild(document.createElement('span'));
+      bouton.appendChild(b);
     }
 
-    let controle = bouton.querySelector(':scope > .auto-refresh-controle');
-    if (!controle) {
-      controle = document.createElement('button');
-      controle.type = 'button';
-      controle.className = 'auto-refresh-controle';
-      controle.title = "Réglages de l'auto-actualisation";
-
-      controle.style.position = 'absolute';
-      if (bouton.classList.contains('icon-btn')) {
-        controle.style.top = '50%';
-        controle.style.right = '100%';
-        controle.style.transform = 'translateY(-50%)';
-        controle.style.marginRight = '6px';
-      } else {
-
-        controle.style.top = '100%';
-        controle.style.left = '50%';
-        controle.style.transform = 'translateX(-50%)';
-
-        controle.style.marginTop = '3px';
+    if (!bouton._arcVuObs && typeof IntersectionObserver === 'function') {
+      bouton._arcVuObs = true;
+      if (!arcVisibilite) {
+        arcVisibilite = new IntersectionObserver(function (es) {
+          es.forEach(function (e) { e.target._arcVu = e.isIntersecting; const f = e.target.querySelector('.arc-barre > span'); if (f) f._p = -1; });
+          mettreAJourAffichage();
+        });
       }
-      controle.style.height = bouton.classList.contains('icon-btn') ? '26px' : '22px';
-      controle.style.padding = '0 8px';
-      controle.style.display = 'inline-flex';
-      controle.style.alignItems = 'center';
-      controle.style.justifyContent = 'center';
-      controle.style.gap = '6px';
-      controle.style.borderRadius = '6px';
-      controle.style.border = 'none';
-      controle.style.cursor = 'pointer';
-      controle.style.background = 'var(--button-color)';
-      controle.style.color = 'var(--button-text-color)';
-      controle.style.transition = 'background .2s ease';
-      controle.style.fontSize = '12px';
-      controle.style.whiteSpace = 'nowrap';
-      controle.style.zIndex = '10';
-
-      const chronoSpan = document.createElement('span');
-      chronoSpan.className = 'auto-refresh-chrono';
-      chronoSpan.style.opacity = '0.85';
-      controle.appendChild(chronoSpan);
-
-      const modele = bouton.querySelector('svg');
-      let icone = null;
-      if (modele) {
-        const iconeWrap = document.createElement('span');
-        iconeWrap.style.position = 'relative';
-        iconeWrap.style.display = 'inline-flex';
-        iconeWrap.style.alignItems = 'center';
-        iconeWrap.style.justifyContent = 'center';
-        iconeWrap.style.width = '18px';
-        iconeWrap.style.height = '18px';
-
-        icone = modele.cloneNode(true);
-        icone.setAttribute('width', '18');
-        icone.setAttribute('height', '18');
-        icone.style.pointerEvents = 'none';
-        icone.style.transition = 'transform .25s ease';
-        iconeWrap.appendChild(icone);
-
-        const lettreA = document.createElement('span');
-        lettreA.textContent = 'A';
-        lettreA.style.position = 'absolute';
-        lettreA.style.top = '50%';
-        lettreA.style.left = '50%';
-        lettreA.style.transform = 'translate(-50%, -50%)';
-        lettreA.style.fontSize = '8px';
-        lettreA.style.fontWeight = '700';
-        lettreA.style.lineHeight = '1';
-        lettreA.style.pointerEvents = 'none';
-        lettreA.style.color = 'var(--button-text-color)';
-        iconeWrap.appendChild(lettreA);
-
-        controle.appendChild(iconeWrap);
-      } else {
-        const repli = document.createElement('span');
-        repli.textContent = '⋮';
-        controle.appendChild(repli);
-      }
-
-      controle.addEventListener('mouseenter', function () {
-        controle.style.background = 'var(--button-hover-color)';
-        if (icone) icone.style.transform = 'rotate(90deg)';
-      });
-      controle.addEventListener('mouseleave', function () {
-        controle.style.background = 'var(--button-color)';
-        if (icone) icone.style.transform = 'rotate(0deg)';
-      });
-      controle.addEventListener('click', function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-        ouvrirMenu(controle);
-      });
-
-      bouton.appendChild(controle);
+      arcVisibilite.observe(bouton);
     }
 
-    const chronoSpan = controle.querySelector('.auto-refresh-chrono');
-    return { chronoSpan, dots: controle };
+    if (!bouton._arcObs && window.MutationObserver) {
+      bouton._arcObs = new MutationObserver(function () { mettreAJourAffichage(); });
+      bouton._arcObs.observe(bouton, { attributes: true, attributeFilter: ['disabled'] });
+    }
+    return b;
   }
-
-  function definirTexteChrono(chronoSpan, texte) {
-    if (chronoSpan.getAttribute('data-chrono') !== texte) chronoSpan.setAttribute('data-chrono', texte);
-    if (chronoSpan.firstChild) chronoSpan.textContent = '';
-    const d = texte ? 'inline' : 'none';
-    if (chronoSpan.style.display !== d) chronoSpan.style.display = d;
-  }
-
   function mettreAJourAffichage() {
+    const marche = enMarche() && debutCycle > 0;
+    const h = document.documentElement;
+    if (marche !== h.hasAttribute('data-arc-auto')) h.toggleAttribute('data-arc-auto', marche);
+    if (!marche) return;
+
+    const maintenant = Date.now();
+    const fin = debutCycle + intervalleSec * 1000;
     boutonsActualiser().forEach(function (bouton) {
-      const { chronoSpan } = assurerConteneur(bouton);
-      definirTexteChrono(chronoSpan, estActifIci() ? '(' + secondesRestantes + 's)' : '');
+      const fill = assurerBarre(bouton).firstChild;
+      if (fill._cycle !== debutCycle) { fill._cycle = debutCycle; fill._depart = bouton.disabled ? null : debutCycle; fill._p = -1; }
+      if (bouton.disabled) { fill._depart = null; fill._p = -1; return; }
+      if (fill._depart == null) fill._depart = maintenant;
+
+      if (bouton._arcVu === false) { if (fill._anim) { try { fill._anim.cancel(); } catch (e) {  } fill._anim = null; } fill._p = -1; return; }
+      if (fill._p === fin && fill._anim && fill._anim.playState !== 'idle') return;
+      if (fill._anim) { try { fill._anim.cancel(); } catch (e) {  } fill._anim = null; }
+      const duree = Math.max(1, fin - fill._depart);
+      const p = Math.min(1, Math.max(0, (maintenant - fill._depart) / duree));
+      fill.style.transition = 'none';
+      fill.style.transform = 'scaleX(' + p.toFixed(4) + ')';
+
+      if (arcDefil) { fill._p = -1; return; }
+      fill._p = fin;
+      if (fill.animate && fin > maintenant) {
+        fill._anim = fill.animate([{ transform: 'scaleX(' + p.toFixed(4) + ')' }, { transform: 'scaleX(1)' }], { duration: fin - maintenant, easing: 'linear', fill: 'forwards' });
+      } else fill.style.transform = 'scaleX(1)';
     });
   }
+
+  addEventListener('scroll', function () {
+    if (!arcDefil && enMarche()) {
+      boutonsActualiser().forEach(function (b) { const f = b.querySelector('.arc-barre > span'); if (f && f._anim) { f._p = -1; } });
+      arcDefil = 1; mettreAJourAffichage();
+    }
+    clearTimeout(arcDefil);
+    arcDefil = setTimeout(function () { arcDefil = 0; mettreAJourAffichage(); }, 250);
+  }, { passive: true });
+
+  function boutonSous(e) {
+    const t = e.target && e.target.closest ? e.target.closest(SEL_ACTU) : null;
+    if (t) return t;
+    if (typeof e.clientX !== 'number') return null;
+    const gris = document.querySelectorAll('button.refresh-text-btn:disabled');
+    for (let i = 0; i < gris.length; i++) {
+      const r = gris[i].getBoundingClientRect();
+      if (r.width && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) return gris[i];
+    }
+    return null;
+  }
+  let ignorerClicJusqua = 0;
+  let ouvertLe = 0;
+  function ouvrirReglagesDepuisBouton(doigt) {
+    if (appui) { clearTimeout(appui.t); appui = null; }
+    if (doigt) ignorerClicJusqua = Date.now() + 900;
+    if (Date.now() - ouvertLe < 800) return;
+    ouvertLe = Date.now();
+    ecoOuvrirReglages('actualisation');
+  }
+
+  document.addEventListener('contextmenu', function (e) {
+    if (!boutonSous(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    ouvrirReglagesDepuisBouton(!!appui || (!!e.pointerType && e.pointerType !== 'mouse'));
+  }, true);
+
+  let appui = null;
+  document.addEventListener('pointerdown', function (e) {
+    if (e.pointerType === 'mouse' || !boutonSous(e)) return;
+    const x0 = e.clientX, y0 = e.clientY;
+    if (appui) clearTimeout(appui.t);
+    appui = { x: x0, y: y0, t: setTimeout(function () { appui = null; ouvrirReglagesDepuisBouton(true); }, 550) };
+  }, true);
+  function finAppui(e) {
+    if (!appui) return;
+    if (e.type === 'pointermove' && Math.abs(e.clientX - appui.x) < 10 && Math.abs(e.clientY - appui.y) < 10) return;
+    clearTimeout(appui.t);
+    appui = null;
+  }
+  ['pointerup', 'pointercancel', 'pointermove'].forEach(function (t) { document.addEventListener(t, finAppui, true); });
+  document.addEventListener('click', function (e) {
+    const b = boutonSous(e);
+    if (!b) return;
+    if (Date.now() < ignorerClicJusqua) { e.preventDefault(); e.stopPropagation(); return; }
+    if (!e.isTrusted) return;
+
+    if (b.disabled) return;
+    if (enMarche()) demarrerCycle();
+  }, true);
+
+  document.addEventListener('mouseover', function (e) {
+    const b = e.target && e.target.closest ? e.target.closest(SEL_ACTU) : null;
+    if (!b) return;
+    if (b._arcTitre === undefined) b._arcTitre = b.getAttribute('title') || 'Actualiser';
+    const t = b._arcTitre + (enMarche() && debutCycle ? ' · auto dans ' + restantSec() + ' s' : ' · auto-actualisation coupée') + ' — clic droit : réglages';
+    if (b.getAttribute('title') !== t) b.setAttribute('title', t);
+  }, true);
 
   let menu = null;
 
@@ -12773,7 +13666,7 @@
 
     const curseurIntervalle = document.createElement('input');
     curseurIntervalle.type = 'range';
-    curseurIntervalle.min = '2';
+    curseurIntervalle.min = '3';
     curseurIntervalle.max = '120';
     curseurIntervalle.step = '1';
     curseurIntervalle.value = String(Math.min(120, intervalleSec));
@@ -12786,10 +13679,10 @@
     valeurIntervalle.style.minWidth = '96px';
     valeurIntervalle.style.whiteSpace = 'nowrap';
     valeurIntervalle.style.textAlign = 'right';
-    valeurIntervalle.title = 'Clic : saisir un intervalle (minimum 2 s)';
+    valeurIntervalle.title = 'Clic : saisir un intervalle (minimum 3 s)';
 
     function reglerIntervalle(sec) {
-      intervalleSec = Math.min(3600, Math.max(2, Math.round(sec)));
+      intervalleSec = Math.min(3600, Math.max(3, Math.round(sec)));
       GM_setValue('intervalleSec', intervalleSec);
       secondesRestantes = intervalleSec;
       curseurIntervalle.value = String(Math.min(120, intervalleSec));
@@ -12819,6 +13712,29 @@
     menu.appendChild(blocGif);
     menu.appendChild(separateur);
     menu.appendChild(ligneIntervalle);
+
+    const avert = document.createElement('div');
+    avert.setAttribute('data-arc-avert', '');
+    avert.style.cssText = 'display:none;margin:2px 4px 4px;padding:5px 8px;border-radius:6px;font-size:11.5px;line-height:1.35;color:#E5C07B;background:rgba(229,192,123,.12);border-left:3px solid #E5C07B';
+    function majAvert() {
+      let d = 0, quoi = '';
+      if (notifTopicActualiseActive) {
+        let g = null;
+        if (gifActif && gifDonnees) { try { g = gifCourant(); } catch (e) { g = null; } }
+        if (g) { d = dureeLectureGif(g); quoi = 'Le GIF'; } else { d = dureeNotifMs(); quoi = 'La notification « Topic actualisé »'; }
+      }
+      const sec = function (ms) { return (Math.round(ms / 100) / 10).toString().replace('.', ',') + ' s'; };
+      const trop = d > intervalleSec * 1000;
+      avert.textContent = trop ? '⚠ ' + quoi + ' dure ' + sec(d) + ', plus que l\'intervalle (' + intervalleSec + ' s) : à chaque actualisation automatique, ' + (quoi === 'Le GIF' ? 'il est coupé et repart' : 'elle est coupée et repart') + ' du début. Allonge l\'intervalle ou raccourcis la durée.' : '';
+      avert.style.display = trop ? 'block' : 'none';
+    }
+    majAvert();
+    ['input', 'change', 'click'].forEach(function (t) { menu.addEventListener(t, function () { setTimeout(majAvert, 0); }); });
+    menu.appendChild(avert);
+    const noteGeste = document.createElement('div');
+    noteGeste.style.cssText = 'margin:6px 4px 2px;font-size:11px;line-height:1.35;color:#8A8D91';
+    noteGeste.textContent = 'La barre en bas du bouton « Actualiser » démarre à la fin de l\'attente de 3 s du forum et arrive au bout à la prochaine actualisation (un clic à la main la remet à zéro). Clic droit, ou appui long au doigt, sur « Actualiser » : ces réglages.';
+    menu.appendChild(noteGeste);
 
     document.body.appendChild(menu);
 
@@ -13541,7 +14457,8 @@
 })();
   } });
 
-  ECO_MODULES.push({ id: "citations", nom: "Citations+", version: "4.61", desc: "Citations dépliées, aperçus et « Répondu par ».", debut: "idle", page: true, reglages: true, code: function (window, history) {
+  ECO_MODULES.push({ id: "citations", nom: "Citations+", version: "4.65", desc: "Citations dépliées, aperçus et « Répondu par ».", debut: "idle", page: true, reglages: true, code: function (window, history) {
+    const { setTimeout, setInterval, requestAnimationFrame, requestIdleCallback, MutationObserver, IntersectionObserver, ResizeObserver } = (typeof ecoMesures === 'function' ? ecoMesures : (window.__ecoMesures || function () { return window; }))("citations");
 (function () {
   'use strict';
 
@@ -13653,6 +14570,7 @@
     surlignage: true,
     boutonSujet: true,
     infosSujet: false,
+    ligneLongueur: 'moyenne',
   };
   const reglages = (function () {
     let lu = {};
@@ -13733,6 +14651,11 @@
 
   function appliquerReglage(cle) {
     if (cle === 'affCitations') { reglages.affReponses = reglages.affCitations; enregistrerReglages(); majAffichageCitations(); }
+    if (cle === 'ligneLongueur') {
+
+      document.querySelectorAll('[' + ATTR_LIGNE + ']').forEach(function (l) { l.remove(); });
+      try { majLignesCitations(); } catch (e) {  }
+    }
     if (/^apercu|^sansApercu/.test(cle)) fermerPreviewFlottant();
   }
 
@@ -13884,6 +14807,11 @@
     ];
     rubrique('Affichage des citations');
     choix('affCitations', 'Citations >>n°', OPTIONS_AFF);
+    choix('ligneLongueur', 'Ligne au-dessus des citations', [
+      ['courte', 'Courte', 'Texte du post coupé à 120 caractères'],
+      ['moyenne', 'Moyenne', 'Texte du post coupé à 250 caractères'],
+      ['entiere', 'Entière', 'Tout le texte du post (gros pavés compris)'],
+    ]);
     caseACocher('compact', 'Citations imbriquées compactes',
       'À partir du 2e niveau : sans avatar, marges réduites (s’applique aux prochaines citations dépliées)');
     caseACocher('mediasApi', 'Posts hors page : miniatures et lecteurs',
@@ -14023,7 +14951,11 @@
       '  transform: none !important;\n' +
       '  filter: none !important;\n' +
       '  box-shadow: none !important;\n' +
-      '}';
+      '}\n' +
+
+      '[data-cp-aller]{margin-left:-14px;margin-right:auto;padding:0 4px;border:0;background:none;font:inherit;line-height:1;cursor:pointer;color:var(--id,inherit);opacity:.7}\n' +
+      '[data-cp-aller]:hover{opacity:1;color:var(--id-hover-color,inherit)}\n' +
+      '@media (pointer:coarse){[data-cp-aller]{padding:8px 8px;margin-top:-8px;margin-bottom:-8px;margin-left:-16px}}';
     document.head.appendChild(style);
   })();
 
@@ -14310,11 +15242,10 @@
     menu.appendChild(
       creerLigneMenu('Signaler / Modifier / Supprimer…', function () {
 
-        const post = trouverPostDansPage(numero);
-        if (!post) return;
-        const boutonReel = elementDuPost(post, '.menu-btn');
-        if (boutonReel) boutonReel.click();
-        mettreEnEvidence(post);
+        allerAuPost(numero, function (post) {
+          const boutonReel = elementDuPost(post, '.menu-btn');
+          if (boutonReel) boutonReel.click();
+        });
       })
     );
 
@@ -14343,7 +15274,74 @@
     }, 0);
   }
 
+  function routeurDuSite() {
+    try { const a = document.querySelector('#app'); return a && a.__vue_app__ ? a.__vue_app__.config.globalProperties.$router : null; } catch (e) { return null; }
+  }
+  async function allerAuPost(numero, puis) {
+    const surPlace = trouverPostDansPage(numero);
+    if (surPlace) {
+      mettreEnEvidence(surPlace);
+      if (puis) setTimeout(function () { const p = trouverPostDansPage(numero); if (p) puis(p); }, 450);
+      return;
+    }
+    let chemin = null;
+    try {
+      const d = await recupererPostApi(numero);
+      const idTopic = d && (typeof d.topic === 'object' && d.topic ? d.topic.id : d.topic);
+      if (!idTopic) throw new Error('topic inconnu');
+      if (new RegExp('^/topics/' + idTopic + '(/|$)').test(location.pathname)) chemin = location.pathname;
+      else {
+        let slug = d.topic && typeof d.topic === 'object' ? d.topic.slug : '';
+        if (!slug) {
+          const r = await fetch('/nanachannel/topics/' + idTopic + '/', { headers: { Accept: 'application/json' }, credentials: 'include' });
+          if (r.ok) { const t = await r.json(); slug = (t && t.slug) || ''; }
+        }
+        chemin = '/topics/' + idTopic + '/' + slug;
+      }
+    } catch (e) {
+      window.alert('Post n° ' + numero + ' introuvable (supprimé ?).');
+      return;
+    }
+    const routeur = routeurDuSite();
+    try {
+      if (routeur) {
+        const x = chemin === location.pathname ? routeur.push({ hash: '#post-' + numero }) : routeur.push(chemin + '#post-' + numero);
+        if (x && x.catch) x.catch(function () {  });
+      } else { location.href = chemin + '#post-' + numero; return; }
+    } catch (e) { location.href = chemin + '#post-' + numero; return; }
+    const debut = Date.now();
+    (function attendre() {
+      const p = trouverPostDansPage(numero);
+      if (p) {
+        setTimeout(function () {
+          const q = trouverPostDansPage(numero);
+          if (!q) return;
+          mettreEnEvidence(q);
+          if (puis) setTimeout(function () { const r = trouverPostDansPage(numero); if (r) puis(r); }, 450);
+        }, 250);
+        return;
+      }
+      if (Date.now() - debut < 12000) setTimeout(attendre, 150);
+    })();
+  }
+
   function ajouterMenuReplique(clone, numero) {
+
+    const num = clone.querySelector('p.numero');
+    if (num && !(num.nextElementSibling && num.nextElementSibling.hasAttribute('data-cp-aller'))) {
+      const aller = document.createElement('button');
+      aller.type = 'button';
+      aller.setAttribute('data-cp-aller', '');
+      aller.textContent = '↗';
+      aller.title = 'Aller au post n° ' + numero;
+      aller.setAttribute('aria-label', 'Aller au post n° ' + numero);
+      aller.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        allerAuPost(numero);
+      });
+      num.insertAdjacentElement('afterend', aller);
+    }
     const boutonMenu = clone.querySelector('.menu-btn');
     if (!boutonMenu) return;
 
@@ -16050,6 +17048,40 @@
     return frag;
   }
 
+  const LONGUEURS_LIGNE = { courte: 120, moyenne: 250, entiere: 0 };
+  function tronquerTexteLigne(el) {
+    const max = LONGUEURS_LIGNE[reglages.ligneLongueur];
+    if (!max) return;
+    const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+    let n = 0, coupe = null;
+    while (w.nextNode()) {
+      const x = w.currentNode;
+      if (x.nodeType === 1) {
+        if (x.tagName === 'IMG') { n += 3; if (n > max) { coupe = { avant: x }; break; } }
+        continue;
+      }
+      const l = x.nodeValue.length;
+      if (n + l > max) { coupe = { noeud: x, pos: Math.max(0, max - n) }; break; }
+      n += l;
+    }
+    if (!coupe) return;
+    const r = document.createRange();
+    if (coupe.noeud) {
+
+      const v = coupe.noeud.nodeValue;
+      let p = coupe.pos;
+      const esp = v.lastIndexOf(' ', p);
+      if (esp > p - 25 && esp > 0) p = esp;
+      r.setStart(coupe.noeud, p);
+    } else r.setStartBefore(coupe.avant);
+    r.setEndAfter(el.lastChild);
+    r.deleteContents();
+    const fin = document.createElement('span');
+    fin.className = 'cp-suite';
+    fin.textContent = ' …';
+    el.appendChild(fin);
+  }
+
   function remplirLigne(ligne, infos) {
     const numero = ligne.getAttribute(ATTR_LIGNE);
     ligne.textContent = '';
@@ -16083,6 +17115,7 @@
     texte.className = 'cp-texte';
     if (infos.corps) texte.appendChild(infos.corps);
     if (!texte.textContent.trim() && !texte.querySelector('img')) texte.appendChild(marque(infos.vide || '(pas de texte)'));
+    tronquerTexteLigne(texte);
     corps.appendChild(texte);
     ligne.appendChild(corps);
     ligne.title = infos.pseudo + ' — n° ' + numero + ' (clic : déplier / replier)';
@@ -16524,7 +17557,7 @@
   function infosPage1(idTopic) {
     if (!page1ParTopic.has(idTopic)) {
       const p = fetch(location.origin + '/nanachannel/topics/' + idTopic + '/posts/?page=1', {
-        headers: { Accept: 'application/json' }, credentials: 'include',
+        headers: { Accept: 'application/json' }, credentials: 'include', eco: 'fond', ecoCache: 600000,
       }).then(function (r) {
         if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.json();
@@ -16684,7 +17717,7 @@
   }
   async function lirePageTopicApi(id, n) {
     const r = await fetch(location.origin + '/nanachannel/topics/' + id + '/posts/?page=' + n, {
-      headers: { Accept: 'application/json' }, credentials: 'include',
+      headers: { Accept: 'application/json' }, credentials: 'include', eco: 'fond', ecoCache: 300000,
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const d = await r.json();
@@ -16701,28 +17734,30 @@
     });
     if (!maxDom) return;
     if (horsPage.topic !== id) { horsPage.topic = id; horsPage.index = new Map(); horsPage.pages = new Map(); horsPage.t = 0; horsPage.maxVu = 0; }
-    if (maxDom === horsPage.maxVu && Date.now() - horsPage.t < 30000) return;
+
+    if (maxDom === horsPage.maxVu && Date.now() - horsPage.t < 120000) return;
+    if (document.hidden) return;
     horsPage.enCours = true;
     horsPage.maxVu = maxDom;
     (async function () {
-      const p1 = await lirePageTopicApi(id, 1);
-      const parPage = p1.posts.length || 20;
-      const total = Math.max(1, Math.ceil(p1.count / parPage));
-      horsPage.pages.set(1, p1.posts);
+      const pp = window.__ecoPagesTopic;
+      let suivante, total, parPage = 20;
+      if (pp && pp.chemin === location.pathname && pp.fin) {
+        total = pp.total; parPage = pp.parPage || 20;
+        suivante = pp.fin + 1;
+      } else {
+        const p1 = await lirePageTopicApi(id, 1);
+        parPage = p1.posts.length || 20;
+        total = Math.max(1, Math.ceil(p1.count / parPage));
+        horsPage.pages.set(1, p1.posts);
+        suivante = total;
+      }
       const lues = [];
-      for (let n = total; n >= 1 && total - n < 200; n -= 3) {
-        const lot = [];
-        for (let k = n; k > n - 3 && k >= 1; k--) lot.push(k);
-        const res = await Promise.all(lot.map(function (k) {
-          const gardee = horsPage.pages.get(k);
-          if (gardee && k < total && gardee.length >= parPage) return gardee;
-          return lirePageTopicApi(id, k).then(function (d) { horsPage.pages.set(k, d.posts); return d.posts; });
-        }));
-        let touche = false;
-        res.forEach(function (posts) {
-          posts.forEach(function (x) { lues.push(x); if (Number(x.id) <= maxDom) touche = true; });
-        });
-        if (touche) break;
+      if (suivante >= 1 && suivante <= total) {
+        const gardee = horsPage.pages.get(suivante);
+        const posts = gardee && suivante < total && gardee.length >= parPage ? gardee
+          : await lirePageTopicApi(id, suivante).then(function (d) { horsPage.pages.set(suivante, d.posts); return d.posts; });
+        posts.forEach(function (x) { lues.push(x); });
       }
       const index = new Map();
       lues.forEach(function (x) {
@@ -16870,7 +17905,8 @@
 })();
   } });
 
-  ECO_MODULES.push({ id: "images", nom: "Images+", version: "0.56", desc: "Grand aperçu au survol, galerie au clic, tailles P / M / G / O, recherche d'image.", debut: "idle", page: true, reglages: false, code: function (window, history) {
+  ECO_MODULES.push({ id: "images", nom: "Images+", version: "0.58", desc: "Grand aperçu au survol, galerie au clic, tailles P / M / G / O, recherche d'image.", debut: "idle", page: true, reglages: false, code: function (window, history) {
+    const { setTimeout, setInterval, requestAnimationFrame, requestIdleCallback, MutationObserver, IntersectionObserver, ResizeObserver } = (typeof ecoMesures === 'function' ? ecoMesures : (window.__ecoMesures || function () { return window; }))("images");
 (function () {
   'use strict';
 
@@ -17504,11 +18540,11 @@
   const GAB_PRESET_MIN = 100;
   const GAB_VIDEO_MIN = 150;
   const GAB_VIDEO_BASE = 4096;
-  const GAB_RE_HOTE = /^https?:\/\/(?:image\.noelshack\.com|(?:www\.)?noelshack\.com|i\.imgur\.com|files\.catbox\.moe|litter\.catbox\.moe)\//i;
+  const GAB_RE_HOTE = /^https?:\/\/(?:image\.noelshack\.com|(?:www\.)?noelshack\.com|(?:i\.)?imgur\.com|files\.catbox\.moe|litter\.catbox\.moe)\//i;
   const GAB_RE_IMAGE = /\.(?:png|jpe?g|gif|webp|avif|bmp)$/i;
   const GAB_RE_SITE = /^https?:\/\/(?:www\.)?nanachannel\.moe\/+media\/uploads\//i;
   const GAB_RE_BALISE = /\[media:([^\]\s]+)\]/gi;
-  const GAB_RE_LIEN = /https?:\/\/(?:image\.noelshack\.com|i\.imgur\.com|files\.catbox\.moe|litter\.catbox\.moe)\/[^\s<>"'​-‍⁠-⁤﻿]+?\.(?:png|jpe?g|gif|webp|avif|bmp|webm|mp4|mov|m4v)(?=$|[^\w.\-\/])/gi;
+  const GAB_RE_LIEN = /https?:\/\/(?:image\.noelshack\.com|(?:i\.)?imgur\.com|files\.catbox\.moe|litter\.catbox\.moe)\/[^\s<>"'​-‍⁠-⁤﻿]+?\.(?:png|jpe?g|gif|webp|avif|bmp|webm|mp4|mov|m4v)(?=$|[^\w.\-\/])/gi;
   const RE_LIEN_VIDEO = /\.(?:webm|mp4|mov|m4v)(?:[?#]|$)/i;
 
   const GAB_RE_STICKER = /^https?:\/\/(?:www\.)?nanachannel\.moe\/+assets\/([^\/?#]+?)(?:-[A-Za-z0-9_-]{8})?\.(?:webp|png|gif|jpe?g|avif)(?:[?#]|$)/i;
@@ -17524,7 +18560,8 @@
 
   const GAB_SELECTEUR = '.post-container .content img, [data-citation-inline] img, .preview-box img, [' + ATTR_APERCU_MSG + '] img, [data-mp-apercu-edition] img, .miniblog-item .content img, ' +
     '.post-container .content video, [data-citation-inline] video, .preview-box video, [' + ATTR_APERCU_MSG + '] video, [data-mp-apercu-edition] video, .miniblog-item .content video';
-  const GAB_EXCLUS = SELECTEUR_EXCLUS + ', ' + SELECTEUR_VIDEOS_EXCLUES + ', [data-up-envoi], [data-up-config], [data-up-file], [data-ip-rail]';
+
+  const GAB_EXCLUS = SELECTEUR_EXCLUS + ', ' + SELECTEUR_VIDEOS_EXCLUES + ', [data-up-envoi], [data-up-config], [data-up-file], [data-ip-rail], [data-mp-visuel-ed]';
   const GAB_ATTR = 'data-gabarit';
   const GAB_ATTR_SITE = 'data-gab-site';
   const GAB_ATTR_LIBERE = 'data-gab-libere';
@@ -18453,9 +19490,21 @@
     return m && m.isConnected ? m : null;
   }
   function dansVitrine(t) { const v = railImg && vitrine(railImg); return !!(v && v !== railImg && t && t.nodeType === 1 && v.contains(t)); }
+
+  function rectVitrine(el) {
+    const v = vitrine(el);
+    const r = v.getBoundingClientRect();
+    const ed = v !== el && v.closest ? v.closest('[data-mp-visuel-ed]') : null;
+    if (!ed) return r;
+    const b = ed.getBoundingClientRect();
+    const left = Math.max(r.left, b.left), top = Math.max(r.top, b.top);
+    const right = Math.min(r.right, b.right), bottom = Math.min(r.bottom, b.bottom);
+    const w = Math.max(0, right - left), h = Math.max(0, bottom - top);
+    return { left: left, top: top, right: left + w, bottom: top + h, width: w && h ? w : 0, height: w && h ? h : 0, x: left, y: top };
+  }
   function placerRail() {
     if (!rail || !railImg) return;
-    const r = vitrine(railImg).getBoundingClientRect();
+    const r = rectVitrine(railImg);
     const vw = zoneEcran().w, vh = window.innerHeight;
     const z = Math.max(9986, zIndexAncetres(vitrine(railImg)) + 2);
     if (rail.style.zIndex !== String(z)) rail.style.zIndex = String(z);
@@ -18587,7 +19636,7 @@
 
   function dansZone(x, y) {
     if (!railImg || !rail || rail.style.display === 'none' || !railImg.isConnected) return false;
-    const a = vitrine(railImg).getBoundingClientRect(), b = rectBloc();
+    const a = rectVitrine(railImg), b = rectBloc();
     return x >= Math.min(a.left, b.left) - 4 && x <= Math.max(a.right, b.right) + 4 &&
       y >= Math.min(a.top, b.top) - 4 && y <= Math.max(a.bottom, b.bottom) + 4;
   }
@@ -18620,7 +19669,7 @@
     (function etape() {
       if (!railImg) { boucleRail = false; return; }
       if (!railImg.isConnected) { fermerRail(); boucleRail = false; return; }
-      const r = vitrine(railImg).getBoundingClientRect();
+      const r = rectVitrine(railImg);
       const c = capsuleRP();
       const cr = c ? c.getBoundingClientRect() : null;
       const k = r.left + ',' + r.top + ',' + r.width + ',' + r.height + ',' + window.innerWidth + ',' + window.innerHeight + (cr ? ',' + cr.width + ',' + cr.height : ',-') +
@@ -19901,7 +20950,8 @@
 })();
   } });
 
-  ECO_MODULES.push({ id: "liens", nom: "Liens+", version: "0.40", desc: "Intégration des vidéos, sondages StrawPoll, titres des liens.", debut: "idle", page: false, reglages: true, code: function (GM_getValue, GM_setValue, GM_info) {
+  ECO_MODULES.push({ id: "liens", nom: "Liens+", version: "0.42", desc: "Intégration des vidéos, sondages StrawPoll, titres des liens.", debut: "idle", page: false, reglages: true, code: function (GM_getValue, GM_setValue, GM_info) {
+    const { setTimeout, setInterval, requestAnimationFrame, requestIdleCallback, MutationObserver, IntersectionObserver, ResizeObserver } = (typeof ecoMesures === 'function' ? ecoMesures : (window.__ecoMesures || function () { return window; }))("liens");
 (function () {
   'use strict';
 
@@ -20425,7 +21475,8 @@
       m.src = e.u;
       m.referrerPolicy = 'no-referrer';
       if (e.video) { m.controls = true; m.preload = 'metadata'; m.playsInline = true; if (e.affiche) m.poster = e.affiche; } else { m.alt = e.n || ''; m.loading = 'lazy'; }
-      m.style.cssText = e.video ? 'display:block;width:480px;max-width:100%;height:auto;max-height:360px;object-fit:contain;border-radius:6px;background:#000;' : 'display:block;max-width:min(360px,100%);max-height:300px;border-radius:6px;';
+
+      m.style.cssText = e.video ? 'display:block;width:auto;height:auto;max-width:min(480px,100%);max-height:360px;border-radius:6px;' : 'display:block;max-width:min(360px,100%);max-height:300px;border-radius:6px;';
 
       m.addEventListener('error', function () { cadre.remove(); a.removeAttribute(ATTR + '-lien-cache'); if (e.fb) { delete apercusFb[id]; return; } if (apercusSt[id] && apercusSt[id].u === e.u) { delete apercusSt[id]; memoriserApercusSt(); } });
       cadre.appendChild(m);
@@ -20768,7 +21819,7 @@
     return z === 'message' ? lecteurChoisi(nom) : z === 'signature' ? !!reglages.autoSignatures && lecteurChoisi(nom) : false;
   }
 
-  const RE_VIDEO_UPLOADS = /^https?:\/\/(?:files\.catbox\.moe|litter\.catbox\.moe|i\.imgur\.com|0x0\.st)\/[^\s?#"'<>]+\.(?:mp4|webm|mov|m4v)(?:[?#]|$)/i;
+  const RE_VIDEO_UPLOADS = /^https?:\/\/(?:files\.catbox\.moe|litter\.catbox\.moe|(?:i\.)?imgur\.com|0x0\.st)\/[^\s?#"'<>]+\.(?:mp4|webm|mov|m4v)(?:[?#]|$)/i;
   function uploadsPlusActif() {
     try { const o = JSON.parse(localStorage.getItem('nanachannel-eco-plus') || '{}') || {}; return !(o.modules && o.modules.uploads === false); } catch (e) { return true; }
   }
@@ -21613,7 +22664,94 @@
 })();
   } });
 
-  ECO_MODULES.push({ id: "messages", nom: "Messages+", version: "0.43", desc: "Fenêtre de réponse flottante et aperçu de l'édition.", debut: "idle", page: true, reglages: false, code: function (window, history) {
+  ECO_MODULES.push({ id: "messages", nom: "Messages+", version: "0.46", desc: "Fenêtre de réponse flottante et aperçu de l'édition.", debut: "idle", page: true, reglages: false, code: function (window, history) {
+    const { setTimeout, setInterval, requestAnimationFrame, requestIdleCallback, MutationObserver, IntersectionObserver, ResizeObserver } = (typeof ecoMesures === 'function' ? ecoMesures : (window.__ecoMesures || function () { return window; }))("messages");
+
+    (function aaPlus() {
+      const ENTREES = [
+        ['[gros]', '[gros]', 'Gros', 'Texte en gros ([gros]…[gros])', 'mp-aa-gros'],
+        ['-~', '~-', 'Arc-en-ciel', 'Texte arc-en-ciel (-~…~-, sur une ligne)', 'mp-aa-arc'],
+      ];
+      const st = document.createElement('style');
+      st.setAttribute('data-mp-aa', '');
+      st.textContent = '.format-menu-item.mp-aa-gros>span{font-size:17px;line-height:1.1;font-weight:600}' +
+        '.format-menu-item.mp-aa-arc>span{font-weight:700;background:linear-gradient(90deg,#ff3b3b,#ff9a1f,#ffe11f,#3bd16f,#2fa8ff,#8a5cff,#e04fd8);-webkit-background-clip:text;background-clip:text;color:transparent}';
+      (document.head || document.documentElement).appendChild(st);
+
+      const CHAMP = 'input.input-mp,input.signature-input';
+      function zoneDe(menu) {
+        for (let n = menu.parentElement; n && n !== document.body; n = n.parentElement) {
+          const z = n.querySelector('textarea') || n.querySelector(CHAMP);
+          if (z) return z;
+        }
+        return null;
+      }
+      const SET_TA = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
+      const SET_IN = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+      function appliquer(z, ouv, fer) {
+        const v = z.value, a = z.selectionStart || 0, b = z.selectionEnd || 0;
+        const sel = v.slice(a, b);
+        (z.tagName === 'TEXTAREA' ? SET_TA : SET_IN).call(z, v.slice(0, a) + ouv + sel + fer + v.slice(b));
+        const visible = z.offsetParent !== null && getComputedStyle(z).display !== 'none';
+        if (sel) z.setSelectionRange(a, b + ouv.length + fer.length); else z.setSelectionRange(a + ouv.length, a + ouv.length);
+        z.dispatchEvent(new Event('input', { bubbles: true }));
+        if (visible) { try { z.focus(); } catch (e) {  } }
+      }
+      function poser(menu) {
+        if (!menu || menu.querySelector('[data-mp-aa]')) return;
+        const z = zoneDe(menu);
+        if (!z) return;
+        ENTREES.forEach(function (x) {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'format-menu-item ' + x[4];
+          b.title = x[3];
+          b.setAttribute('data-mp-aa', '');
+          const sp = document.createElement('span');
+          sp.textContent = x[2];
+          b.appendChild(sp);
+
+          const modele = menu.querySelector('.format-menu-item:not([data-mp-aa])');
+          if (modele) Array.from(modele.attributes).forEach(function (at) { if (/^data-v-/.test(at.name)) b.setAttribute(at.name, ''); });
+          b.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            appliquer(zoneDe(menu) || z, x[0], x[1]);
+
+            const aa = menu.parentElement && menu.parentElement.querySelector('button.bouton-toolbar');
+            setTimeout(function () {
+              if (!menu.isConnected) return;
+              if (menu.hasAttribute('data-pf-format')) menu.hidden = true;
+              else if (aa) aa.click();
+            }, 0);
+          });
+          menu.appendChild(b);
+        });
+      }
+
+      function poserDans(n) {
+        if (n.nodeType !== 1) return;
+        if (n.classList.contains('format-menu')) { poser(n); return; }
+        if (!n.firstElementChild) return;
+        const l = n.getElementsByClassName('format-menu');
+        for (let i = 0; i < l.length; i++) poser(l[i]);
+      }
+      function tout() { poserDans(document.body || document.documentElement); }
+      try {
+        new MutationObserver(function (muts) {
+          for (let i = 0; i < muts.length; i++) {
+            const a = muts[i].addedNodes;
+            for (let j = 0; j < a.length; j++) poserDans(a[j]);
+          }
+        }).observe(document.documentElement, { childList: true, subtree: true });
+      } catch (e) {  }
+      tout();
+      document.addEventListener('click', function (e) {
+        const aa = e.target && e.target.closest && e.target.closest('button.bouton-toolbar[title="Formatage du texte"], .bouton-toolbar.format-toggle-btn');
+        if (!aa) return;
+        [0, 30, 120, 400].forEach(function (d) { setTimeout(function () { poserDans(aa.parentElement || document.body); }, d); });
+      }, true);
+    })();
 (function () {
   'use strict';
 
@@ -21753,7 +22891,10 @@
     '[data-mp-visuel-ed] .mp-v-atome{position:relative;display:inline-block;vertical-align:bottom;margin:2px 1px;border-radius:4px;user-select:none;-webkit-user-select:none}' +
     '[data-mp-visuel-ed] .mp-v-atome.ProseMirror-selectednode{outline:2px solid var(--link-color,#5c9fd6);outline-offset:1px}' +
     '[data-mp-visuel-ed] .mp-v-image img,[data-mp-visuel-ed] .mp-v-sticker img{display:block;max-height:90px;max-width:160px;border-radius:4px}' +
-    '[data-mp-visuel-ed] .mp-v-atome[data-mp-dim] img{max-height:none;max-width:100%}' +
+
+    '[data-mp-visuel-ed] .mp-v-atome[data-mp-dim]{max-width:100%}' +
+    '[data-mp-visuel-ed] .mp-v-atome[data-mp-dim] img,[data-mp-visuel-ed] .mp-v-atome[data-mp-dim] video{max-height:none;max-width:100%;height:auto!important}' +
+    '[data-mp-visuel-ed] .mp-v-video video{display:block;max-height:120px;max-width:220px;border-radius:4px;background:#000;object-fit:contain}' +
     '[data-mp-visuel-ed] .mp-v-smiley{vertical-align:middle;margin:0}' +
     '[data-mp-visuel-ed] .mp-v-smiley img{display:block}' +
     '[data-mp-visuel-ed] .mp-v-carte{display:inline-flex;align-items:center;gap:6px;max-width:260px;padding:4px 8px 4px 4px;border:1px solid rgba(127,127,127,.4);border-radius:6px;background:rgba(127,127,127,.12);font-size:12px;line-height:1.3;opacity:.9}' +
@@ -23364,7 +24505,24 @@
     dom.contentEditable = 'false';
     dom.draggable = true;
     dom.setAttribute('data-mp-url', node.attrs.code);
+    if (node.attrs.src) dom.setAttribute('data-mp-src', node.attrs.src.replace(V_INVISIBLES, ''));
     dom.title = node.attrs.code;
+
+    let carteVideo = null;
+    if (g === 'video' && node.attrs.src) {
+      const v = document.createElement('video');
+      v.src = node.attrs.src.replace(V_INVISIBLES, '');
+      v.muted = true;
+      v.preload = 'metadata';
+      v.playsInline = true;
+      v.setAttribute('playsinline', '');
+      v.draggable = false;
+      v.addEventListener('error', function () {
+        if (!v.isConnected || !carteVideo) return;
+        v.replaceWith(carteVideo);
+      });
+      dom.appendChild(v);
+    }
     if (g === 'image' || g === 'smiley' || g === 'sticker') {
       const im = document.createElement('img');
       im.src = node.attrs.src.replace(V_INVISIBLES, '');
@@ -23393,7 +24551,8 @@
       try { hote = new URL(node.attrs.code).hostname.replace(/^www\./, ''); } catch (e) {  }
       t.textContent = (node.attrs.service || 'Vidéo') + (hote ? ' · ' + hote : '');
       c.append(j, t);
-      dom.appendChild(c);
+      if (g === 'video' && dom.querySelector('video')) carteVideo = c;
+      else dom.appendChild(c);
     }
     if (g !== 'smiley') {
       const poignee = document.createElement('span');
@@ -23825,12 +24984,14 @@
     const vus = {};
     ed.querySelectorAll('.mp-v-image, .mp-v-sticker, .mp-v-video').forEach(function (s) {
       const video = s.classList.contains('mp-v-video');
-      const vis = video ? s.querySelector('.mp-v-carte') : s.querySelector('img');
-      const u = (s.getAttribute('data-mp-url') || '').replace(/\u2063[\u200B-\u200D\u2060]{1,8}\u2064$/, '');
+      const vreel = video ? s.querySelector('video') : null;
+      const vis = video ? (vreel || s.querySelector('.mp-v-carte')) : s.querySelector('img');
+      const u = (s.getAttribute('data-mp-src') || s.getAttribute('data-mp-url') || '').replace(/\u2063[\u200B-\u200D\u2060]{1,8}\u2064$/, '');
       const src = video ? u : vis && vis.getAttribute('src');
       if (!vis || !src) return;
       const k = vus[src] = (vus[src] || 0) + 1;
-      const abs = video ? src : vis.src;
+      let abs = src;
+      try { abs = video ? new URL(src, location.href).href : vis.src; } catch (e) {  }
       const im = medias.filter(function (x) {
         const xs = x.getAttribute('src') || '';
         return xs === src || x.src === abs || (x.currentSrc && x.currentSrc === abs) || x.getAttribute('data-up-video-de-img') === src || x.getAttribute('data-up-tiers') === src;
@@ -23839,7 +25000,7 @@
       let j = im.getAttribute('data-mp-jumeau');
       if (!j) { j = 'j' + (++vJumeaux); im.setAttribute('data-mp-jumeau', j); }
       if (vis.getAttribute('data-mp-jumeau') !== j) vis.setAttribute('data-mp-jumeau', j);
-      if (video) return;
+      if (video && !vreel) return;
       const r = im.getBoundingClientRect();
       if (r.width < 4 || r.height < 4) return;
       const w = Math.round(r.width) + 'px', h = Math.round(r.height) + 'px';
@@ -23936,6 +25097,7 @@
   } });
 
   ECO_MODULES.push({ id: "mpplus", nom: "MP+", version: "0.14", desc: "Discussions privées : aperçu 1:1, recherche, tout charger, corbeille, profils.", debut: "start", page: true, reglages: false, code: function (window, history) {
+    const { setTimeout, setInterval, requestAnimationFrame, requestIdleCallback, MutationObserver, IntersectionObserver, ResizeObserver } = (typeof ecoMesures === 'function' ? ecoMesures : (window.__ecoMesures || function () { return window; }))("mpplus");
 (function () {
   'use strict';
 
@@ -26630,6 +27792,7 @@
   } });
 
   ECO_MODULES.push({ id: "navigation", nom: "Navigation+", version: "0.25", desc: "Flèches flottantes et défilement maintenu.", debut: "idle", page: true, reglages: false, code: function (window, history) {
+    const { setTimeout, setInterval, requestAnimationFrame, requestIdleCallback, MutationObserver, IntersectionObserver, ResizeObserver } = (typeof ecoMesures === 'function' ? ecoMesures : (window.__ecoMesures || function () { return window; }))("navigation");
 (function () {
   'use strict';
 
@@ -27092,7 +28255,8 @@
 })();
   } });
 
-  ECO_MODULES.push({ id: "recherche", nom: "Recherche+", version: "0.31", desc: "Tags, types de dossiers, mots-clés et suggestions de pseudos.", debut: "idle", page: true, reglages: false, code: function (window, history) {
+  ECO_MODULES.push({ id: "recherche", nom: "Recherche+", version: "0.33", desc: "Tags, types de dossiers, mots-clés et suggestions de pseudos.", debut: "idle", page: true, reglages: false, code: function (window, history) {
+    const { setTimeout, setInterval, requestAnimationFrame, requestIdleCallback, MutationObserver, IntersectionObserver, ResizeObserver } = (typeof ecoMesures === 'function' ? ecoMesures : (window.__ecoMesures || function () { return window; }))("recherche");
 (function () {
   'use strict';
 
@@ -27266,6 +28430,7 @@
     ['Finance', 'rgb(250,250,0)', 'black'],
     ['Schizo', 'rgb(255,20,147)', 'white'],
     ['Lifehack', 'rgb(32,201,151)', 'white'],
+    ['Automobile', 'rgb(90,127,196)', 'white'],
   ];
   const COULEURS = new Map(TAGS_CONNUS.map(function (t) { return [t[0], { fond: t[1], texte: t[2] }]; }));
   const ORDRE_TAGS = TAGS_CONNUS.map(function (t) { return t[0]; });
@@ -27504,9 +28669,7 @@
     const parPseudo = memoRecherche.mode === 'pseudo';
     const exact = pseudoExact ? normaliser(pseudoExact) : null;
     return liste.filter(function (s) {
-      const tags = nomsTags(s);
-      const ok = !tags.length || tags.some(function (t) { return !tagsExclus.has(t); });
-      if (!ok) return false;
+      if (!tagsOk(nomsTags(s))) return false;
       if (!typeOk(s)) return false;
       if (!texte) return true;
       if (parPseudo) {
@@ -28048,7 +29211,31 @@
     const n = wrapperNatif();
     return n ? Array.from(n.children).filter(function (el) { return el.matches('.topic'); }) : [];
   }
-  function tagsOk(noms) { return !noms.length || noms.some(function (t) { return !tagsExclus.has(t); }); }
+
+  function tagsAvecBouton() {
+    const b = document.querySelectorAll('#' + ID_BARRE + ' button.rp-tag');
+    if (!b.length) return null;
+    const e = new Set();
+    b.forEach(function (x) { e.add(x.dataset.tag); });
+    return e;
+  }
+  function tagsOk(noms) {
+    const B = tagsAvecBouton();
+    const c = B ? noms.filter(function (t) { return B.has(t); }) : noms;
+
+    return !c.some(function (t) { return tagsExclus.has(t); });
+  }
+  function ajouterTagsVus(noms) {
+    const barre = document.getElementById(ID_BARRE);
+    if (!barre) return;
+    const B = tagsAvecBouton() || new Set();
+    const avant = barre.querySelector('.rp-dossiers, .rp-infos');
+    (noms || []).forEach(function (n) {
+      if (!n || B.has(n)) return;
+      B.add(n);
+      barre.insertBefore(creerBoutonTag(n), avant);
+    });
+  }
 
   function appliquerMode() {
     const natif = wrapperNatif();
@@ -28130,6 +29317,11 @@
   }
 
   function majBoutons() {
+
+    const vus = [];
+    document.querySelectorAll('.topics-wrapper .tag-container, .topics-wrapper .tags span, .topics-wrapper .tags-mobile span').forEach(function (el) { const n = el.textContent.trim(); if (n && n.length < 30 && vus.indexOf(n) === -1) vus.push(n); });
+    (sujets || []).forEach(function (x) { nomsTags(x).forEach(function (n) { if (vus.indexOf(n) === -1) vus.push(n); }); });
+    ajouterTagsVus(vus);
     document.querySelectorAll('#' + ID_BARRE + ' button.rp-tag').forEach(function (b) {
       b.classList.toggle('rp-actif', !tagsExclus.has(b.dataset.tag));
     });
@@ -28150,7 +29342,7 @@
         lab.classList.toggle('rp-grise', sansRoses);
         if (c.disabled !== sansRoses) c.disabled = sansRoses;
         lab.title = optionRoses === true
-          ? 'Topics roses (NSFW) : cachés par ton compte (Mon compte → Personnalisation → « Cacher les topics roses »).'
+          ? 'Topics roses (NSFW) : cachés par ton compte (Mon compte → Confidentialité → « Cacher les topics roses »).'
           : sansRoses
             ? 'Topics roses (NSFW) : aucun reçu du forum — l\'option « Cacher les topics roses » de ton compte est sans doute activée.'
             : 'Topics roses (NSFW) — décocher pour les masquer';
@@ -28199,7 +29391,15 @@
     const barre = document.createElement('div');
     barre.id = ID_BARRE;
     barre.className = 'rp-barre-tags';
-    tousLesTagsConnus().forEach(function (nom) {
+    tousLesTagsConnus().forEach(function (nom) { barre.appendChild(creerBoutonTag(nom)); });
+    barre.appendChild(creerCasesDossiers());
+    const infos = document.createElement('div');
+    infos.className = 'rp-infos';
+    barre.appendChild(infos);
+    return barre;
+  }
+  function creerBoutonTag(nom) {
+    {
       const c = couleurTag(nom);
       const b = document.createElement('button');
       b.type = 'button';
@@ -28223,13 +29423,9 @@
         rendre();
       });
       brancherMaintien(b, nom);
-      barre.appendChild(b);
-    });
-    barre.appendChild(creerCasesDossiers());
-    const infos = document.createElement('div');
-    infos.className = 'rp-infos';
-    barre.appendChild(infos);
-    return barre;
+      b.classList.toggle('rp-actif', !tagsExclus.has(nom));
+      return b;
+    }
   }
 
   const CLE_OPTION_ROSES = 'nanachan-recherche-plus-cacher-roses';
@@ -29047,14 +30243,29 @@
   })();
 
   function actualiserTopic() {
-    const b = Array.from(document.querySelectorAll('button.refresh-text-btn')).find(function (x) {
-      return !x.closest('.auto-refresh-controle') && !x.closest('[data-pp]') && !x.closest('#' + ID_TOPIC);
+
+    return quandActualiserPret(function () {
+      return Array.from(document.querySelectorAll('button.refresh-text-btn')).find(function (x) {
+        return !x.closest('.auto-refresh-controle') && !x.closest('[data-pp]') && !x.closest('#' + ID_TOPIC) && x.parentNode;
+      }) || null;
+    }, function (b) {
+      const parent = b.parentNode;
+      const suivant = b.nextSibling;
+      parent.removeChild(b);
+      try { b.click(); } finally { parent.insertBefore(b, suivant); }
     });
-    if (!b || !b.parentNode) return false;
-    const parent = b.parentNode;
-    const suivant = b.nextSibling;
-    parent.removeChild(b);
-    try { b.click(); } finally { parent.insertBefore(b, suivant); }
+  }
+
+  function quandActualiserPret(trouver, faire) {
+    const b = trouver();
+    if (!b) return false;
+    if (!b.disabled) { faire(b); return true; }
+    let n = 0;
+    const t = setInterval(function () {
+      const x = trouver();
+      if (x && !x.disabled) { clearInterval(t); faire(x); }
+      else if (++n > 50) clearInterval(t);
+    }, 100);
     return true;
   }
 
@@ -29545,6 +30756,7 @@
   } });
 
   ECO_MODULES.push({ id: "reactions", nom: "Réactions+", version: "1.94", desc: "Barre ⭐ des Favoris, stickers et réactions lisibles.", debut: "idle", page: false, reglages: true, code: function (GM_getValue, GM_setValue, GM_info) {
+    const { setTimeout, setInterval, requestAnimationFrame, requestIdleCallback, MutationObserver, IntersectionObserver, ResizeObserver } = (typeof ecoMesures === 'function' ? ecoMesures : (window.__ecoMesures || function () { return window; }))("reactions");
 (function () {
   'use strict';
 
@@ -37410,7 +38622,10 @@
 })();
   } });
 
-  ECO_MODULES.push({ id: "shitbox", nom: "Widgets+", version: "0.10", desc: "Widgets rétractables (placement à droite / en dessous) et Shitbox (pubs au clic, défilement réglable).", debut: "idle", page: false, reglages: true, code: function (GM_getValue, GM_setValue, GM_info) {
+  ECO_MODULES.push({ id: "shitbox", nom: "Widgets+", version: "0.26", desc: "Widgets rétractables (placement à droite / en dessous), Favoris (liste / grille, dossiers ; widget et Notifications+) et Shitbox (pubs au clic, défilement réglable).", debut: "idle", page: false, reglages: true, code: function (GM_getValue, GM_setValue, GM_info) {
+    const { setTimeout, setInterval, requestAnimationFrame, requestIdleCallback, MutationObserver, IntersectionObserver, ResizeObserver } = (typeof ecoMesures === 'function' ? ecoMesures : (window.__ecoMesures || function () { return window; }))("shitbox");
+    let sbpDefil = 0;
+    let sbpVu = true, sbpVuCible = null, sbpVuObs = null;
 (function () {
   'use strict';
 
@@ -37495,7 +38710,7 @@
 
   function ecoGlisserEnCours() { return document.documentElement.hasAttribute('data-rp-glisser'); }
 
-  const VERSION = '0.10';
+  const VERSION = '0.12';
   document.documentElement.setAttribute('data-shitbox-plus', VERSION);
   const journal = function () {
     try { console.info.apply(console, ['[Shitbox+]'].concat(Array.from(arguments))); } catch (e) {  }
@@ -37509,11 +38724,33 @@
     ordre: 'melange',
     fondu: true,
     actif: true,
+    favoris: true,
+    favVue: 'liste',
+    favVuePanneau: 'liste',
+    favDossier: '',
+    favDossierPanneau: '',
+    favOuvert: false,
+    favTri: 'dernier',
+    favTriInverse: false,
+    favMesHaut: true,
+    favVueFenetre: 'liste',
+    favDossierFenetre: '',
+    favGrouper: true,
+    favGroupesFermes: {},
+    favFiltres: { tags: [] },
+    favMesAuto: 'tous',
+    favTitreFenetre: true,
   };
   const LIMITES = { dureeImage: [2, 20] };
   const BARRES = ['mini', 'forum'];
 
   let reglages = Object.assign({}, DEFAUTS, GM_getValue('reglages', {}) || {});
+
+  if (!reglages.favMesAuto022) {
+    if (reglages.favMesAuto === 'creation') reglages.favMesAuto = 'tous';
+    reglages.favMesAuto022 = true;
+    try { GM_setValue('reglages', reglages); } catch (e) {  }
+  }
   ['son', 'auto', 'tours'].forEach(function (k) { delete reglages[k]; });
   if (typeof reglages.barre === 'boolean' || BARRES.indexOf(reglages.barre) === -1) reglages.barre = DEFAUTS.barre;
   reglages.dureeImage = Math.max(LIMITES.dureeImage[0], Math.min(LIMITES.dureeImage[1], +reglages.dureeImage || DEFAUTS.dureeImage));
@@ -37936,18 +39173,45 @@
     barreForum.style.pointerEvents = 'none';
     scene.after(barreForum);
   }
-  function majBarre(fraction) {
-    const f = (Math.max(0, Math.min(1, fraction)) * 100).toFixed(2) + '%';
+  function majBarre(fraction, enCours) {
     const visible = !!etat && pubsDisponibles().length > 1;
+
+    const fr = Math.max(0, Math.min(1, fraction));
+    const n = performance.now();
+    const vit = enCours && etat && etat.total > 0 ? 1 / etat.total : 0;
+
+    if (scene && sbpVuCible !== scene && typeof IntersectionObserver === 'function') {
+      if (!sbpVuObs) sbpVuObs = new IntersectionObserver(function (es) { es.forEach(function (e) { if (e.target === sbpVuCible) sbpVu = e.isIntersecting; }); });
+      if (sbpVuCible) sbpVuObs.unobserve(sbpVuCible);
+      sbpVuCible = scene; sbpVu = true;
+      sbpVuObs.observe(scene);
+    }
+    function poser(el, k, v) { if (el.style[k] !== v) el.style[k] = v; }
+    function glisser(i) {
+      poser(i, 'width', '100%'); poser(i, 'transformOrigin', '0 50%'); poser(i, 'transition', 'none');
+      const m = i._sbpBarre;
+      if (!sbpVu) { if (m && m.a) { try { m.a.cancel(); } catch (e) {  } } i._sbpBarre = null; return; }
+      if (sbpDefil) {
+
+        if (m && m.a) { try { m.a.cancel(); } catch (e) {  } m.a = null; }
+        if (!m || m.a !== null || n - m.t > 500) { i._sbpBarre = { f: fr, t: n, v: -1, a: null }; poser(i, 'transform', 'scaleX(' + fr.toFixed(3) + ')'); }
+        return;
+      }
+      if (m && m.v === vit && Math.abs(Math.min(1, m.f + (n - m.t) * m.v) - fr) < 0.01 && (!m.a || m.a.playState !== 'idle')) return;
+      if (m && m.a) { try { m.a.cancel(); } catch (e) {  } }
+      const o = i._sbpBarre = { f: fr, t: n, v: vit, a: null };
+      poser(i, 'transform', 'scaleX(' + fr.toFixed(3) + ')');
+      if (vit && fr < 1 && i.animate) o.a = i.animate([{ transform: 'scaleX(' + fr.toFixed(3) + ')' }, { transform: 'scaleX(1)' }], { duration: (1 - fr) / vit, easing: 'linear', fill: 'forwards' });
+    }
     if (barre) {
       const v = visible && reglages.barre === 'mini';
-      barre.style.opacity = v ? '1' : '0';
-      barre.firstChild.style.width = f;
+      poser(barre, 'opacity', v ? '1' : '0');
+      glisser(barre.firstChild);
     }
     if (barreForum) {
-      barreForum.style.visibility = visible ? '' : 'hidden';
+      poser(barreForum, 'visibility', visible ? '' : 'hidden');
       const i = barreForum.querySelector('.shitbox-progress-bar') || barreForum.firstElementChild;
-      if (i) i.style.width = f;
+      if (i) glisser(i);
     }
   }
 
@@ -37963,7 +39227,7 @@
     if (etat.type === 'video' && animEnFin) {
 
       const v = etat.el;
-      majBarre(((etat.tours * etat.dureeTour) + (v.currentTime || 0) * 1000) / etat.total);
+      majBarre(((etat.tours * etat.dureeTour) + (v.currentTime || 0) * 1000) / etat.total, !v.paused && v.readyState >= 3);
       if (v.paused && !v.ended && !document.hidden && v.readyState >= 2 && shitboxAllumee(widget)) lancerVideo(v);
       return;
     }
@@ -37974,16 +39238,21 @@
         if (peutChanger()) { suivante(false); return; }
         etat.ecoule -= etat.dureeTour;
       }
-      majBarre(etat.ecoule / etat.total);
+      majBarre(etat.ecoule / etat.total, true);
       return;
     }
 
     if (peutChanger()) etat.ecoule += dt;
     if (etat.ecoule >= etat.total) { suivante(false); return; }
-    majBarre(etat.ecoule / etat.total);
+    majBarre(etat.ecoule / etat.total, peutChanger());
   }
   setInterval(tick, 100);
   document.addEventListener('visibilitychange', function () { dernierTick = performance.now(); });
+
+  addEventListener('scroll', function () {
+    clearTimeout(sbpDefil);
+    sbpDefil = setTimeout(function () { sbpDefil = 0; }, 250);
+  }, { passive: true });
 
   function choisirSuivante() {
     const liste = pubsDisponibles();
@@ -38345,6 +39614,30 @@
     titre.appendChild(el('small', null, 'Widgets+ v' + VERSION));
     menu.appendChild(titre);
 
+    menu.appendChild(ligneCase('Favoris : Explorateur', 'favoris', 'Bouton ▾ sur le widget Favoris : tes sujets favoris du site façon Explorateur (dossiers, Liste / Détails / Grille, tri, filtres, recherche, sélection de plusieurs sujets, clic droit ou ⋯ = menu) ; ⤢ l\'ouvre en grand (aussi « 📁 Ranger mes favoris » de Notifications+). « Retirer » enlève vraiment le sujet de tes favoris du site (« Annuler » quelques secondes).', function () { majFavoris(); redessinerFavoris(); }));
+
+    menu.appendChild(ligneCase('Titre « Favoris » : ouvrir en grand', 'favTitreFenetre', 'Clic sur le titre « Favoris » du widget : l\'Explorateur des favoris en grand, au lieu de la page des favoris du site (Ctrl + clic ou clic du milieu : la page, comme avant).'));
+
+    const ligneMes = el('div', 'sbp-ligne');
+    ligneMes.appendChild(el('span', 'sbp-nom', 'Mes topics en favoris'));
+    const segMes = el('div', 'eco-segments');
+    segMes.setAttribute('role', 'radiogroup');
+    [['tous', 'Tous', 'Tous tes topics (anciens et nouveaux) sont ajoutés à tes favoris du site ; un topic que tu retires des favoris n\'est jamais remis'], ['creation', 'À la création', 'Seulement les topics que tu crées à partir de maintenant'], ['non', 'Non', 'Rien d\'automatique']].forEach(function (o) {
+      const b = el('button', null, o[1]);
+      b.type = 'button';
+      b.setAttribute('role', 'radio');
+      b.title = o[2];
+      b.setAttribute('aria-checked', String((reglages.favMesAuto || 'tous') === o[0]));
+      b.addEventListener('click', function () {
+        reglages.favMesAuto = o[0]; enregistrerReglages();
+        segMes.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-checked', String(x === b)); });
+        favMesRefus = false; verifierMesTopicsAuto(); redessinerFavoris();
+      });
+      segMes.appendChild(b);
+    });
+    ligneMes.appendChild(segMes);
+    menu.appendChild(ligneMes);
+    menu.appendChild(el('div', 'sbp-note', 'Tes topics = ceux que Notifications+ connaît (son réglage « Suivre mes topics »). Un de tes topics que tu retires des favoris n\'est jamais remis.'));
     menu.appendChild(ligneCase('Shitbox+ : pubs au clic et défilement', 'actif', 'Décoché : la Shitbox du forum telle quelle (recharge la page pour appliquer)', function () { setTimeout(redessinerMenu, 0); }));
     if (reglages.actif === false) {
       menu.appendChild(el('div', 'sbp-note', 'Shitbox+ éteinte : la Shitbox du forum reste telle quelle. Recharge la page si elle était déjà en place.'));
@@ -38505,6 +39798,1520 @@
     dernierTick = performance.now();
   }
 
+  const FAV_IMG_DUREE = 7 * 24 * 3600 * 1000;
+  let favListe = null;
+  let favLu = 0;
+  let favErreur = '';
+  let favLecture = null;
+  let favImages = GM_getValue('favImages', null);
+  if (!favImages || typeof favImages !== 'object') favImages = {};
+  let favImagesEcriture = 0;
+  let favDossiers = GM_getValue('favDossiers', null);
+  if (!favDossiers || !Array.isArray(favDossiers.dossiers)) favDossiers = { dossiers: [] };
+  let favAnnuler = null;
+  let favRetraits = {};
+  let favMessage = '';
+  const favZones = new Set();
+  function enregistrerFavImages() {
+    if (favImagesEcriture) return;
+    favImagesEcriture = setTimeout(function () {
+      favImagesEcriture = 0;
+      const ids = Object.keys(favImages);
+      if (ids.length > 300) ids.sort(function (a, b) { return (favImages[a].d || 0) - (favImages[b].d || 0); }).slice(0, ids.length - 300).forEach(function (k) { delete favImages[k]; });
+      GM_setValue('favImages', favImages);
+    }, 600);
+  }
+  function enregistrerDossiers() { GM_setValue('favDossiers', favDossiers); }
+  function dossierDe(id) {
+    id = String(id);
+    for (let i = 0; i < favDossiers.dossiers.length; i++) if (favDossiers.dossiers[i].ids.indexOf(id) !== -1) return favDossiers.dossiers[i];
+    return null;
+  }
+  function rangerDans(id, d) {
+    id = String(id);
+    favDossiers.dossiers.forEach(function (x) { x.ids = x.ids.filter(function (y) { return y !== id; }); });
+    if (d) d.ids.push(id);
+    enregistrerDossiers();
+  }
+  function nouveauDossierFav(nom, avecId) {
+    nom = String(nom || '').trim().slice(0, 40);
+    if (!nom) return null;
+    const d = { id: 'd' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36), nom: nom, ids: [] };
+    favDossiers.dossiers.push(d);
+    if (avecId != null) rangerDans(avecId, d); else enregistrerDossiers();
+    return d;
+  }
+
+  function nettoyerDossiers() {
+    if (!favListe) return;
+    const ids = new Set(favListe.map(function (f) { return String(f.id); }));
+    if (favAnnuler) favAnnuler.liste.forEach(function (x) { ids.add(String(x.f.id)); });
+    let change = false;
+    favDossiers.dossiers.forEach(function (d) {
+      const n = d.ids.filter(function (x) { return ids.has(x); });
+      if (n.length !== d.ids.length) { d.ids = n; change = true; }
+    });
+    if (change) enregistrerDossiers();
+  }
+  function lireFavoris(force) {
+    if (favLecture) return favLecture;
+    if (!force && favListe && Date.now() - favLu < 20000) return Promise.resolve(favListe);
+    favLecture = fetch('/nanachannel/me/fav/', { credentials: 'include', headers: { Accept: 'application/json' } }).then(function (r) {
+      if (!r.ok) throw new Error(r.status === 401 || r.status === 403 ? 'pas connecté' : 'erreur ' + r.status);
+      return r.json();
+    }).then(function (j) {
+      const t = Array.isArray(j) ? j : (j && (j.results || j.favoris || j.topics)) || null;
+      if (!Array.isArray(t)) throw new Error('réponse inconnue');
+      const avant = favListe;
+      favListe = t.filter(function (x) { return x && x.id != null; }).map(function (x) {
+        return { id: String(x.id), titre: String(x.title || x.titre || ('Sujet ' + x.id)), slug: String(x.slug || ''), rose: !!x.is_pink };
+      });
+      favLu = Date.now();
+      favErreur = '';
+      nettoyerDossiers();
+
+      if (avant && !favMesEnCours) {
+        const dans = new Set(favListe.map(function (f) { return f.id; }));
+        const miens = new Set(mesTopicsIds());
+        avant.forEach(function (f) { if (!dans.has(f.id) && miens.has(f.id)) exclureMien(f.id, true); });
+      }
+      setTimeout(verifierMesTopicsAuto, 0);
+      return favListe;
+    }, function (e) {
+      favErreur = (e && e.message) || String(e);
+      throw e;
+    }).finally(function () { favLecture = null; });
+    return favLecture;
+  }
+  function relireEtRedessiner(force) { return lireFavoris(force).then(redessinerFavoris, redessinerFavoris); }
+  function cheminSujet(f) { return '/topics/' + f.id + (f.slug ? '/' + f.slug : ''); }
+  function cookieCsrf() {
+    const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+
+  function basculerFavoriSite(id) {
+    const h = { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
+    const c = cookieCsrf();
+    if (c) h['X-CSRFToken'] = c;
+    return fetch('/nanachannel/topics/' + encodeURIComponent(id) + '/fav/', { method: 'POST', credentials: 'include', headers: h }).then(function (r) {
+      if (!r.ok) throw new Error(r.status === 401 || r.status === 403 ? 'refusé par le site (connecté ?)' : 'erreur ' + r.status);
+      return r.json().catch(function () { return {}; });
+    }).then(function (j) { return j && typeof j.is_favorite === 'boolean' ? j.is_favorite : null; });
+  }
+  function signalerChangement() {
+    try { document.dispatchEvent(new Event('eco-favoris-change')); } catch (e) {  }
+  }
+
+  function retirerFavori(f) { return retirerFavoris([f]); }
+  async function retirerFavoris(fs) {
+    fs = fs.filter(function (f) { return f && !favRetraits[f.id] && !f.horsFavoris; });
+    if (!fs.length) return;
+    fs.forEach(function (f) { favRetraits[f.id] = true; });
+    favMessage = '';
+    redessinerFavoris();
+    const faits = [], rates = [];
+    for (let i = 0; i < fs.length; i++) {
+      const f = fs[i];
+      try {
+        let r = await basculerFavoriSite(f.id);
+        if (r === true) r = await basculerFavoriSite(f.id);
+        if (r === true) throw new Error('le site le garde en favori');
+        const d = dossierDe(f.id);
+        faits.push({ f: f, dossier: d ? d.id : '' });
+        if (mesTopicsIds().indexOf(f.id) !== -1) exclureMien(f.id, true);
+      } catch (e) { rates.push(f.titre + ' (' + ((e && e.message) || e) + ')'); }
+      if (fs.length > 1) await new Promise(function (x) { setTimeout(x, 250); });
+    }
+    if (faits.length) {
+      if (favAnnuler) clearTimeout(favAnnuler.minuteur);
+      favAnnuler = { liste: faits, fin: Date.now() + 8000, minuteur: setTimeout(function () { favAnnuler = null; nettoyerDossiers(); redessinerFavoris(); }, 8000) };
+      if (favListe) favListe = favListe.filter(function (x) { return !faits.some(function (y) { return y.f.id === x.id; }); });
+      signalerChangement();
+      setTimeout(function () { relireEtRedessiner(true); }, 1200);
+    }
+    if (rates.length) favMessage = '✖ Pas pu retirer : ' + rates.join(', ') + '.';
+    fs.forEach(function (f) { delete favRetraits[f.id]; });
+    redessinerFavoris();
+  }
+  async function annulerRetrait() {
+    const a = favAnnuler;
+    if (!a) return;
+    clearTimeout(a.minuteur);
+    favAnnuler = null;
+    favMessage = '';
+    const rates = [];
+    for (let i = 0; i < a.liste.length; i++) {
+      const x = a.liste[i];
+      try {
+        let r = await basculerFavoriSite(x.f.id);
+        if (r === false) r = await basculerFavoriSite(x.f.id);
+        const d = favDossiers.dossiers.filter(function (y) { return y.id === x.dossier; })[0];
+        if (d) rangerDans(x.f.id, d);
+        exclureMien(x.f.id, false);
+        if (favListe && !favListe.some(function (y) { return y.id === x.f.id; })) favListe.push(x.f);
+      } catch (e) { rates.push(x.f.titre); }
+    }
+    if (rates.length) favMessage = '✖ Pas pu remettre : ' + rates.join(', ') + '.';
+    signalerChangement();
+    setTimeout(function () { relireEtRedessiner(true); }, 1200);
+    redessinerFavoris();
+  }
+
+  const RE_FAV_IMG = /https?:\/\/[^\s"'<>\]\[)]+?\.(?:png|jpe?g|jfif|gif|webp|avif)(?=$|[\s"'<>\]\[)?#])/gi;
+  const RE_FAV_SMILEY = /^https?:\/\/(?:[\w-]+\.)*jeuxvideo\.com\/|\/smileys?(?:_img)?\//i;
+  function imageDuTexte(t) {
+    t = String(t || '').replace(/[­​-‏⁠-⁤﻿]/g, '');
+    const m0 = /<img[^>]+src=["']([^"']+)["']/i.exec(t);
+    if (m0 && !RE_FAV_SMILEY.test(m0[1]) && !/^data:/i.test(m0[1])) return m0[1];
+    let m;
+    RE_FAV_IMG.lastIndex = 0;
+    while ((m = RE_FAV_IMG.exec(t))) {
+      const u = m[0];
+      if (RE_FAV_SMILEY.test(u)) continue;
+      const n = u.match(/^https?:\/\/(?:www\.)?noelshack\.com\/(\d{4})-(\d{2})-(?:(\d{1,2})-)?(.+)$/i);
+      if (n) return 'https://image.noelshack.com/fichiers/' + n[1] + '/' + n[2] + '/' + (n[3] ? n[3] + '/' : '') + n[4];
+      return u;
+    }
+    return '';
+  }
+  const favFile = [];
+  let favEnCours = 0;
+  const favEchecs = {};
+  function demanderImage(id, fini, infos) {
+    const c = favImages[id];
+    const ti = infos ? lireInfosSujets()[id] : null;
+    if (c && Date.now() - (c.d || 0) < FAV_IMG_DUREE && (!infos || (ti && ti.n != null))) { fini(c.u || ''); return; }
+    if (favFile.some(function (x) { return x.id === id; })) return;
+    favFile.push({ id: id, fini: fini, infos: !!infos });
+    pomperImages();
+  }
+
+  const PORTE_CLE = 'eco-porte-posts';
+  function porteLire() {
+    let o = null;
+    try { o = JSON.parse(localStorage.getItem(PORTE_CLE) || 'null'); } catch (e) { o = null; }
+    if (!o || !Array.isArray(o.t)) o = { t: [], b: 0 };
+    const lim = Date.now() - 60000;
+    o.t = o.t.filter(function (x) { return x > lim; }).slice(-60);
+    return o;
+  }
+  function porteEcrire(o) { try { localStorage.setItem(PORTE_CLE, JSON.stringify(o)); } catch (e) {  } }
+  function porteAttente() {
+    const o = porteLire(), n = Date.now();
+    if (o.b > n) return o.b - n;
+    if (o.t.length < 10) return 0;
+    return Math.max(50, o.t[o.t.length - 10] + 60000 - n);
+  }
+  let porteMinuteur = null;
+
+  function lireFiche(id) {
+    return fetch('/nanachannel/topics/' + id + '/', { credentials: 'include', headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (t) {
+        if (!t) return;
+        ecrireInfoSujet(id, { t: t.title, s: t.slug, a: t.author && t.author.username, g: (t.tags || []).map(function (x) { return x && x.name; }).filter(Boolean), k: !!t.is_locked, p: !!t.is_pink });
+      }).catch(function () {  });
+  }
+  function pomperImages() {
+    while (favEnCours < 1 && favFile.length) {
+      const x0 = favFile[0];
+      const c0 = favImages[x0.id];
+      const t0 = x0.infos ? lireInfosSujets()[x0.id] : null;
+      if (c0 && Date.now() - (c0.d || 0) < FAV_IMG_DUREE && (!x0.infos || (t0 && t0.n != null))) {
+        favFile.shift();
+        if (x0.infos && (!t0 || !t0.g)) lireFiche(x0.id).then(function () { x0.fini(c0.u || ''); }); else x0.fini(c0.u || '');
+        continue;
+      }
+      const a = porteAttente();
+      if (a) { clearTimeout(porteMinuteur); porteMinuteur = setTimeout(pomperImages, Math.min(a, 5000) + 50); return; }
+      const x = favFile.shift();
+      favEnCours++;
+      const o = porteLire(); o.t.push(Date.now()); porteEcrire(o);
+      fetch('/nanachannel/topics/' + x.id + '/posts/?page=1', { credentials: 'include', headers: { Accept: 'application/json' } })
+        .then(function (r) {
+          if (r.status === 429) { const b = porteLire(); b.b = Date.now() + 60000; porteEcrire(b); favFile.unshift(x); throw Object.assign(new Error('429'), { refaire: true }); }
+          if (!r.ok) throw new Error('HTTP ' + r.status); return r.json();
+        })
+        .then(function (d) {
+          const posts = (d && (d.results || d.posts)) || (Array.isArray(d) ? d : []);
+          const tri = posts.slice().sort(function (a, b) { return (a.id || 0) - (b.id || 0); });
+          const op = tri[0];
+          const u = op ? imageDuTexte(op.content || op.message || op.texte || op.content_html || '') : '';
+          favImages[x.id] = { u: u, d: Date.now() };
+          enregistrerFavImages();
+
+          const der = !d.next && tri.length ? tri[tri.length - 1] : null;
+          ecrireInfoSujet(x.id, { n: d.count != null ? d.count : posts.length, a: op && op.author && op.author.username, c: op && op.created_at,
+            l: der ? der.id : null, d: der && der.created_at ? Date.parse(der.created_at) || null : null });
+          (x.infos ? lireFiche(x.id) : Promise.resolve()).then(function () { x.fini(u); });
+        }, function (e) { if (!(e && e.refaire)) x.fini(''); })
+        .finally(function () { favEnCours--; pomperImages(); });
+    }
+  }
+  let favVoyeur = null;
+  function observerVignette(v) {
+    if (!('IntersectionObserver' in window)) { chargerVignette(v); return; }
+    if (!favVoyeur) {
+      favVoyeur = new IntersectionObserver(function (entrees) {
+        entrees.forEach(function (e) { if (e.isIntersecting) { favVoyeur.unobserve(e.target); chargerVignette(e.target); } });
+      }, { rootMargin: '120px' });
+    }
+    favVoyeur.observe(v);
+  }
+  let redessinPrevu = null;
+  function chargerVignette(v) {
+    const id = v.getAttribute('data-sbp-fav-id');
+    if (v.hasAttribute('data-sbp-fav-infos')) {
+
+      demanderImage(id, function () {
+        const t = lireInfosSujets()[id];
+        if (!t || t.n == null) { favEchecs[id] = Date.now(); return; }
+        clearTimeout(redessinPrevu);
+        redessinPrevu = setTimeout(redessinerFavoris, 600);
+      }, true);
+      return;
+    }
+    demanderImage(id, function (u) {
+      if (!v.isConnected || v.querySelector('.sbp-fav-image img')) return;
+      if (!u) { v.setAttribute('data-sbp-fav-img', 'aucune'); return; }
+      const img = el('img');
+      img.alt = '';
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.referrerPolicy = 'no-referrer';
+      img.draggable = false;
+      img.addEventListener('error', function () { img.remove(); v.setAttribute('data-sbp-fav-img', 'aucune'); });
+      img.src = u;
+      v.querySelector('.sbp-fav-image').appendChild(img);
+      v.setAttribute('data-sbp-fav-img', 'oui');
+    });
+  }
+
+  function pontNavigation() {
+    const h = document.documentElement;
+    if (h.hasAttribute('data-sbp-pont')) return true;
+    const code = function () {
+      const H = document.documentElement;
+      if (H.hasAttribute('data-sbp-pont')) return;
+      document.addEventListener('sbp-aller', function () {
+        const c = H.getAttribute('data-sbp-aller');
+        H.removeAttribute('data-sbp-aller');
+        if (!c) return;
+        const app = document.querySelector('#app');
+        const r = app && app.__vue_app__ && app.__vue_app__.config && app.__vue_app__.config.globalProperties.$router;
+        if (r && typeof r.push === 'function') r.push(c).catch(function () { location.href = c; });
+        else location.href = c;
+      });
+      H.setAttribute('data-sbp-pont', '');
+    };
+    try {
+      const sc = document.createElement('script');
+      sc.textContent = '(' + code.toString() + ')();';
+      (document.head || h).appendChild(sc);
+      sc.remove();
+    } catch (e) {  }
+    return h.hasAttribute('data-sbp-pont');
+  }
+  function allerSujet(e) {
+    if (e.defaultPrevented || e.button || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+    if (e.target.closest && e.target.closest('.sbp-fav-actions')) return;
+    const c = this.getAttribute('href');
+
+    const z = this.closest('[data-favw-contexte="panneau"]');
+    if (z) {
+      z.setAttribute('data-favw-clic', this.getAttribute('data-sbp-fav-sujet') || '');
+      const ev = new Event('eco-favoris-ouvrir', { bubbles: true, cancelable: true });
+      try { z.dispatchEvent(ev); } catch (er) {  }
+      z.removeAttribute('data-favw-clic');
+      if (ev.defaultPrevented) { e.preventDefault(); return; }
+    }
+    if (!c || !pontNavigation()) return;
+    e.preventDefault();
+    document.documentElement.setAttribute('data-sbp-aller', c);
+    document.dispatchEvent(new Event('sbp-aller'));
+  }
+
+  let favMenu = null;
+  function fermerMenuFav() {
+    if (favMenu) { favMenu.remove(); favMenu = null; }
+    document.removeEventListener('pointerdown', clicHorsMenu, true);
+  }
+  function clicHorsMenu(e) { if (favMenu && !favMenu.contains(e.target)) fermerMenuFav(); }
+  function ouvrirMenuFav(ancre, entrees, x, y) {
+    fermerMenuFav();
+    const m = el('div', 'sbp-fav-menu');
+    m.setAttribute('data-eco-ui', '');
+    m.setAttribute('data-sbp-fav', '');
+    m.setAttribute('role', 'menu');
+    entrees.forEach(function (o) {
+      if (o === '-') { m.appendChild(el('div', 'sbp-fav-menu-sep')); return; }
+      if (o.titre && !o.action) { m.appendChild(el('div', 'sbp-fav-menu-titre', o.titre)); return; }
+      if (o.rangee) {
+        const r = el('div', 'sbp-fav-menu-rapide');
+        o.rangee.forEach(function (x) {
+          const b = el('button', 'sbp-fav-menu-rapide-btn' + (x.danger ? ' sbp-danger' : ''), x.texte);
+          b.type = 'button';
+          b.title = x.titre || '';
+          b.setAttribute('aria-label', x.titre || x.texte);
+          b.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); fermerMenuFav(); x.action(); });
+          r.appendChild(b);
+        });
+        m.appendChild(r);
+        return;
+      }
+      const b = el('button', 'sbp-fav-menu-item' + (o.danger ? ' sbp-danger' : '') + (o.actif ? ' sbp-actif' : ''), o.tag ? '' : o.texte);
+      if (o.tag) {
+        b.appendChild(el('span', 'sbp-fav-menu-coche', o.coche ? '☑' : '☐'));
+        const pt = el('span', 'sbp-fav-tag-pastille' + (o.nsfw ? ' sbp-fav-nsfw' : ''), o.tag[0]);
+        pt.style.background = o.tag[1]; pt.style.color = o.tag[2];
+        b.appendChild(pt);
+        if (o.nb != null) b.appendChild(el('span', 'sbp-fav-menu-nb', String(o.nb)));
+      }
+      b.type = 'button';
+      b.setAttribute('role', 'menuitem');
+      b.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); fermerMenuFav(); o.action(); });
+      m.appendChild(b);
+    });
+    document.body.appendChild(m);
+    const r = ancre ? ancre.getBoundingClientRect() : { left: x, right: x, top: y, bottom: y };
+    const w = m.offsetWidth, h = m.offsetHeight;
+    let gx = Math.min(window.innerWidth - w - 6, Math.max(6, (x != null ? x : r.right - w)));
+    let gy = (y != null ? y : r.bottom + 4);
+    if (gy + h > window.innerHeight - 6) gy = Math.max(6, (y != null ? y : r.top - 4) - h);
+    m.style.left = gx + 'px';
+    m.style.top = gy + 'px';
+    favMenu = m;
+    setTimeout(function () { document.addEventListener('pointerdown', clicHorsMenu, true); }, 0);
+  }
+  function entreesRanger(f) {
+    const d0 = dossierDe(f.id);
+    const l = favDossiers.dossiers.map(function (d) {
+      return { texte: '📁 ' + d.nom, actif: d0 === d, action: function () { rangerDans(f.id, d); apresChangementDossiers(); } };
+    });
+    if (d0) l.push({ texte: 'Sortir du dossier', action: function () { rangerDans(f.id, null); apresChangementDossiers(); } });
+    if (l.length) l.push('-');
+    l.push({ texte: '＋ Nouveau dossier…', action: function () { demanderNomDossier('', function (nom) { nouveauDossierFav(nom, f.id); apresChangementDossiers(); }); } });
+    return l;
+  }
+  function entreesDossier(d) {
+    return [
+      { texte: '✎ Renommer…', action: function () { demanderNomDossier(d.nom, function (nom) { d.nom = nom.slice(0, 40); enregistrerDossiers(); apresChangementDossiers(); }); } },
+      { texte: '🗑 Supprimer le dossier', danger: true, action: function () {
+        if (d.ids.length && !confirm('Supprimer le dossier « ' + d.nom + ' » ? Ses ' + d.ids.length + ' sujet(s) restent dans tes favoris (sans dossier).')) return;
+        favDossiers.dossiers = favDossiers.dossiers.filter(function (x) { return x !== d; });
+        enregistrerDossiers();
+        ['favDossier', 'favDossierPanneau', 'favDossierFenetre'].forEach(function (k) { if (reglages[k] === d.id) reglages[k] = ''; });
+        enregistrerReglages();
+        apresChangementDossiers();
+      } },
+    ];
+  }
+
+  function demanderNomDossier(valeur, fini) {
+    fermerMenuFav();
+    const fond = el('div', 'sbp-fav-saisie');
+    fond.setAttribute('data-eco-ui', '');
+    fond.setAttribute('data-sbp-fav', '');
+    const boite = el('form', 'sbp-fav-saisie-boite');
+    const t = el('div', 'sbp-fav-saisie-titre', valeur ? 'Renommer le dossier' : 'Nouveau dossier');
+    const ch = el('input');
+    ch.type = 'text';
+    ch.maxLength = 40;
+    ch.value = valeur || '';
+    ch.placeholder = 'Nom du dossier';
+    const bas = el('div', 'sbp-fav-saisie-bas');
+    const an = el('button', 'eco-btn', 'Annuler');
+    an.type = 'button';
+    const ok = el('button', 'eco-btn eco-btn-pri', valeur ? 'Renommer' : 'Créer');
+    ok.type = 'submit';
+    bas.appendChild(an);
+    bas.appendChild(ok);
+    boite.appendChild(t);
+    boite.appendChild(ch);
+    boite.appendChild(bas);
+    fond.appendChild(boite);
+    const fermer = function () { fond.remove(); };
+    an.addEventListener('click', fermer);
+    fond.addEventListener('pointerdown', function (e) { if (e.target === fond) fermer(); });
+    ch.addEventListener('keydown', function (e) { if (e.key === 'Escape') { e.preventDefault(); fermer(); } });
+    boite.addEventListener('submit', function (e) {
+      e.preventDefault();
+      const v = ch.value.trim();
+      if (!v) { ch.focus(); return; }
+      fermer();
+      fini(v);
+    });
+    document.body.appendChild(fond);
+    setTimeout(function () { ch.focus(); ch.select(); }, 0);
+  }
+  function apresChangementDossiers() {
+    redessinerFavoris();
+    signalerChangement();
+  }
+
+  function cleVue(ctx) { return ctx === 'panneau' ? 'favVuePanneau' : ctx === 'fenetre' ? 'favVueFenetre' : 'favVue'; }
+  function cleDossier(ctx) { return ctx === 'panneau' ? 'favDossierPanneau' : ctx === 'fenetre' ? 'favDossierFenetre' : 'favDossier'; }
+
+  const CLE_INFOS = 'eco-topics-infos';
+  function lireInfosSujets() { try { return JSON.parse(localStorage.getItem(CLE_INFOS) || '{}') || {}; } catch (e) { return {}; } }
+  function ecrireInfoSujet(id, o) {
+    const t = lireInfosSujets();
+    const a = t[id] || {};
+    Object.keys(o).forEach(function (k) { if (o[k] != null && o[k] !== '') a[k] = o[k]; });
+    a.maj = Date.now();
+    t[id] = a;
+    const ks = Object.keys(t);
+    if (ks.length > 600) ks.sort(function (x, y) { return (t[x].maj || 0) - (t[y].maj || 0); }).slice(0, ks.length - 600).forEach(function (k) { delete t[k]; });
+    try { localStorage.setItem(CLE_INFOS, JSON.stringify(t)); } catch (e) {  }
+  }
+  function etatNotifs() {
+    try { const d = JSON.parse(localStorage.getItem('nanachan-notifications-plus') || 'null'); return d && d.suivis ? d : null; } catch (e) { return null; }
+  }
+  function nonLu(s) { return !!s && s.vu != null && (s.dernier || 0) > (s.vu || 0); }
+  function deltaTexte(ms) {
+    if (!ms) return '—';
+    const m = Math.max(0, Math.round((Date.now() - ms) / 60000));
+    if (m < 60) return m + 'min';
+    const h = Math.round(m / 60);
+    if (h < 24) return h + 'h';
+    return Math.round(h / 24) + 'j';
+  }
+  const DOSSIER_NORMAL = 'data:image/gif;base64,R0lGODlhEAANAMQAAP/////urf/qmf7ni//lf//kef/hbf/gZP7dV//ZRP/WNP/SIP7OD//MAPrHAPbEAPLBAOq7AOa4AOCzANarANKoAMigALyWALKOAKiGAJp7AJJ0AP///wAAAAAAAAAAACH5BAUUABwALAAAAAAQAA0AAAV1IMc1jeMEYqqOQAtExJo2gGALwDRRlGWho4Fw6GpZGCgHgQBpOiW73u9RgBSvBECGATE0bmAbQpCpRA7foXqQIFckB4hgSacrBJrK5CARFP6Afwt4FRUHFAIGiouKDIQBFT4WFxcYGZcamRsNHAQNhaChhZwhADs=';
+  const DOSSIER_CHAUD = 'data:image/gif;base64,R0lGODlhEAANAMQAAGwaEfH3/Ns6KvTCvaQoG+Z2a4cgFuNiVLYsHeqNg+VuYuFbTsUwIJolGed9cuBUReRqXXseFJIjGJ4mGbstHud4bOVwZNMzIt1FNqopG3EbEoshFgAAAAAAAAAAAAAAACH5BAUUAAEALAAAAAAQAA0AAAV3YBBQJJWIaDoO7JApKkoNTu0MBDFNknSOlYJQ2GJJGCeExYJoOjOZXS+BgCCKWMUgwkAcKLZw7eGINDILcGXNXmPK5wXCsazXBQ5Ng7AgOCCAgYAXeQ0NCxMOB4uMiwyFCQ09EhsbEZcRGpoaFAEKFIahooYUCiEAOw==';
+  const DOSSIER_ROSE = 'data:image/gif;base64,R0lGODlhEAANAHAAACH5BAEAABkALAAAAAAQAA0AhKgxn96P1+3E6pkskNVyztmA0pQri44phoMnfdh70dd60LE0p6QvmtVzztRtzG8gaNJlyc1YxIsog89gx8lKwMY/vGYdYL43s30kdgAAAAAAAAAAAAAAAAAAAAAAAAAAAAV3YJYBJBCIaDoKrDAQKgoIRV0IhnEcCHKOCYVQ2GIhFidGo8FoOgeDXS/AcDCKWILgsWBAALZwLVJ4SAYTcGLNXlPK5wmjsKzXKwWLxDAxFByAgYAXeRISEwcFEIuMiwuFARI9CBgYD5cPFpoWABkEAIahooYABCEAOw==';
+  const COULEURS_TAGS_FAV = {
+    'Blabla': ['rgb(40,167,69)', 'white'], 'Otaku': ['rgb(128,0,128)', 'white'], 'WEBM': ['rgb(255,140,0)', 'white'],
+    'Actu': ['rgb(0,123,255)', 'white'], 'Art': ['rgb(232,62,140)', 'white'], 'Informatique': ['rgb(23,162,184)', 'white'],
+    'JV': ['rgb(255,193,7)', 'black'], 'Musique': ['rgb(108,117,125)', 'white'], 'Question': ['rgb(220,53,69)', 'white'],
+    'Religion': ['rgb(52,58,64)', 'white'], 'Série/Cinéma': ['rgb(111,66,193)', 'white'], 'Finance': ['rgb(250,250,0)', 'black'],
+    'Schizo': ['rgb(255,20,147)', 'white'], 'Lifehack': ['rgb(32,201,151)', 'white'],
+  };
+
+  let modeleLigneFav = null, modeleLigneLu = '';
+  function modeleLigne() {
+
+    const vraie = document.querySelector('#app .topics-wrapper > .topic:not(.epingled) .tags .tag-container');
+    const ligneSite = vraie && vraie.closest('.topic');
+    if (ligneSite && !ligneSite.closest('.sbp-fav-zone')) {
+      const h = ligneSite.outerHTML;
+      try { if (localStorage.getItem('eco-modele-ligne-sujet') !== h) localStorage.setItem('eco-modele-ligne-sujet', h); } catch (e) {  }
+    }
+    let brut = '';
+    try { brut = localStorage.getItem('eco-modele-ligne-sujet') || ''; } catch (e) { brut = ''; }
+    if (!brut) { try { const d = JSON.parse(localStorage.getItem('nanachan-recherche-plus-modeles') || 'null'); brut = (d && d.ligne) || ''; } catch (e) { brut = ''; } }
+    if (brut !== modeleLigneLu) {
+      modeleLigneLu = brut;
+      modeleLigneFav = null;
+      if (brut) { const t = document.createElement('template'); t.innerHTML = brut; modeleLigneFav = t.content.firstElementChild; }
+    }
+    return modeleLigneFav;
+  }
+  function ligneForum(f, info, ti, mien) {
+    const mod = modeleLigne();
+    if (!mod || !mod.querySelector('a.topic-link')) return null;
+    const l = mod.cloneNode(true);
+    l.classList.remove('epingled', 'hot');
+    const lien = l.querySelector('a.topic-link');
+    lien.href = (info && info.lien) || cheminSujet(f);
+    const n = ti.n != null ? ti.n : null;
+    const icone = l.querySelector('a.topic-link > img');
+    if (icone) { icone.src = f.rose || ti.p ? DOSSIER_ROSE : (n || 0) > 20 ? DOSSIER_CHAUD : DOSSIER_NORMAL; icone.setAttribute('style', 'width: 30px; height: auto; padding-top: 10px; image-rendering: pixelated;'); }
+    const h3 = l.querySelector('h3.titre');
+    if (h3) {
+      const b = h3.querySelector('b') || document.createElement('b');
+      b.textContent = (mien ? '✎ ' : '') + (ti.k ? '🔒 ' : '') + f.titre;
+      h3.textContent = '';
+      h3.appendChild(b);
+      if (n != null) h3.appendChild(document.createTextNode(' (' + n + ') '));
+      if (info && info.badge) {
+        const bd = el('span', 'sbp-fav-badge', info.badge);
+        if (info.badgeStyle) bd.style.cssText = info.badgeStyle;
+        bd.style.marginLeft = '4px';
+        h3.appendChild(bd);
+      }
+    }
+    const auteur = l.querySelector('.hap > p');
+    if (auteur) auteur.textContent = ti.a || '';
+    l.querySelectorAll('.tags, .tags-mobile').forEach(function (zone) {
+      const modeleTag = zone.querySelector('.tag-container') || zone.firstElementChild;
+      zone.textContent = '';
+      (ti.g || []).forEach(function (nom) {
+        const c = COULEURS_TAGS_FAV[nom] || ['rgb(90,90,90)', 'white'];
+        const t = modeleTag ? modeleTag.cloneNode(false) : el('div', 'tag-container');
+        if (!modeleTag) t.style.cssText = 'padding:8px 12px;border-radius:8px;font-weight:600;';
+        t.textContent = nom;
+        t.style.backgroundColor = c[0];
+        t.style.color = c[1];
+        zone.appendChild(t);
+      });
+    });
+    const cellules = l.querySelectorAll('tr > th');
+    const der = cellules[cellules.length - 1];
+    const delta = der && der.querySelector('a');
+    if (delta) delta.textContent = ti.d ? deltaTexte(ti.d) : '';
+    return l;
+  }
+  function trierFavoris(liste, ordreSite, etat) {
+    const tri = reglages.favTri && reglages.favTri !== 'nouveaux' ? reglages.favTri : 'dernier';
+    const inv = reglages.favTriInverse ? -1 : 1;
+    const ti = lireInfosSujets();
+    const S = function (f) { return (etat && etat.suivis[f.id]) || null; };
+    const dernier = function (f) { const t = ti[f.id] || {}; const s = S(f); return Math.max(t.l || 0, (s && s.dernier) || 0); };
+    const nb = function (f) { const t = ti[f.id] || {}; const s = S(f); return t.n != null ? t.n : (s && s.compte) || 0; };
+    const cmp = {
+      dernier: function (a, b) { return dernier(b) - dernier(a); },
+      nouveaux: function (a, b) { return (nonLu(S(b)) ? 1 : 0) - (nonLu(S(a)) ? 1 : 0) || dernier(b) - dernier(a); },
+      alpha: function (a, b) { return String(a.titre).localeCompare(String(b.titre), 'fr', { sensitivity: 'base' }); },
+      creation: function (a, b) { return (+b.id || 0) - (+a.id || 0); },
+      ajout: function (a, b) { return (ordreSite.get(a.id) || 0) - (ordreSite.get(b.id) || 0); },
+      messages: function (a, b) { return nb(b) - nb(a); },
+    }[tri] || function () { return 0; };
+    return liste.slice().sort(function (a, b) { return inv * cmp(a, b); });
+  }
+  const TRIS_FAV = [['dernier', 'Dernier message'], ['alpha', 'Alphabétique'], ['creation', 'Date de création'], ['ajout', 'Ajout aux favoris'], ['messages', 'Nombre de messages']];
+  let infosMemo = null;
+  function lireInfosSujetsMemo() { if (!infosMemo) { infosMemo = lireInfosSujets(); setTimeout(function () { infosMemo = null; }, 0); } return infosMemo; }
+  function lienAbsolu(f, item) {
+    const a = item && (item.matches && item.matches('a[href]') ? item : item.querySelector('a[href]'));
+    return location.origin + ((a && a.getAttribute('href')) || cheminSujet(f)).replace(/^https?:\/\/[^/]+/, '');
+  }
+  async function ajouterFavori(f) {
+    favMessage = '';
+    try {
+      let r = await basculerFavoriSite(f.id);
+      if (r === false) r = await basculerFavoriSite(f.id);
+      signalerChangement();
+      await relireEtRedessiner(true);
+    } catch (e) {
+      favMessage = '✖ « ' + f.titre + ' » n\'a pas pu être ajouté : ' + ((e && e.message) || e) + '.';
+      redessinerFavoris();
+    }
+  }
+
+  const favRecherche = {};
+  const favChercheOuvert = {};
+  const favSel = {};
+  const favAncre = {};
+  const favDoigt = {};
+  const favIgnorer = {};
+  let favGlisse = null;
+  function selDe(ctx) { return favSel[ctx] || (favSel[ctx] = new Set()); }
+
+  const TAGS_FORUM = [
+    ['Blabla', 'rgb(40,167,69)', 'white'], ['Otaku', 'rgb(128,0,128)', 'white'], ['WEBM', 'rgb(255,140,0)', 'white'],
+    ['Actu', 'rgb(0,123,255)', 'white'], ['Art', 'rgb(232,62,140)', 'white'], ['Informatique', 'rgb(23,162,184)', 'white'],
+    ['JV', 'rgb(255,193,7)', 'black'], ['Musique', 'rgb(108,117,125)', 'white'], ['Question', 'rgb(220,53,69)', 'white'],
+    ['Religion', 'rgb(52,58,64)', 'white'], ['Série/Cinéma', 'rgb(111,66,193)', 'white'], ['Finance', 'rgb(250,250,0)', 'black'],
+    ['Schizo', 'rgb(255,20,147)', 'white'], ['Lifehack', 'rgb(32,201,151)', 'white'], ['Automobile', 'rgb(90,127,196)', 'white'],
+  ];
+  const VUES_FAV = [['liste', 'Liste', 'Une ligne de la liste des sujets du forum par sujet'], ['grille', 'Grille', 'Vignettes avec l\'image du 1er message']];
+  function filtresFav() {
+    const f = reglages.favFiltres && typeof reglages.favFiltres === 'object' ? reglages.favFiltres : {};
+    if (!Array.isArray(f.tags)) f.tags = [];
+    reglages.favFiltres = f;
+    return f;
+  }
+  function nbFiltres() { const f = filtresFav(); return (f.nouveaux ? 1 : 0) + (f.mes ? 1 : 0) + (f.roses ? 1 : 0) + f.tags.length; }
+  function deplacer(ids, d) { ids.forEach(function (id) { rangerDans(id, d); }); apresChangementDossiers(); }
+  function deposer(e, d) {
+    if (!favGlisse) return;
+    e.preventDefault(); e.stopPropagation();
+    const ids = favGlisse;
+    favGlisse = null;
+    document.querySelectorAll('.sbp-cible').forEach(function (p) { p.classList.remove('sbp-cible'); });
+    deplacer(ids, d);
+  }
+  function cibleDepot(x, d) {
+    x.addEventListener('dragover', function (e) { if (!favGlisse) return; e.preventDefault(); try { e.dataTransfer.dropEffect = 'move'; } catch (er) {  } x.classList.add('sbp-cible'); });
+    x.addEventListener('dragleave', function () { x.classList.remove('sbp-cible'); });
+    x.addEventListener('drop', function (e) { deposer(e, d); });
+  }
+
+  const SVG_FAV = function (corps, plein) { return '<svg class="sbp-svg" viewBox="0 0 24 24" fill="' + (plein ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + corps + '</svg>'; };
+  const ICO_FAV = {
+    dossierPlus: SVG_FAV('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 10.5v5M9.5 13h5"/>'),
+    crayon: SVG_FAV('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>'),
+    trier: SVG_FAV('<path d="M7 4v16M3.5 16.5L7 20l3.5-3.5M17 20V4M13.5 7.5L17 4l3.5 3.5"/>'),
+    liste: SVG_FAV('<path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r=".6"/><circle cx="4" cy="12" r=".6"/><circle cx="4" cy="18" r=".6"/>'),
+    grille: SVG_FAV('<rect x="4" y="4" width="6.5" height="6.5" rx="1.2"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.2"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.2"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.2"/>'),
+    filtre: SVG_FAV('<path d="M4 5h16l-6.2 7.4V19l-3.6-1.8v-4.8z"/>'),
+    relire: SVG_FAV('<path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4v5h-5"/>'),
+    agrandir: SVG_FAV('<path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/>'),
+    chevron: SVG_FAV('<path d="M6 9l6 6 6-6"/>'),
+    dossier: SVG_FAV('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'),
+    dossierPlein: SVG_FAV('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>', true),
+    etoile: SVG_FAV('<path d="M12 2.8l2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2l-5.6 3 1.1-6.3-4.6-4.4 6.3-.9z"/>', true),
+    etoileVide: SVG_FAV('<path d="M12 2.8l2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2l-5.6 3 1.1-6.3-4.6-4.4 6.3-.9z"/>'),
+    loupe: SVG_FAV('<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>'),
+  };
+  function boutonIco(cls, svg, titre, faire) { const b = bouton(cls, '', titre, faire); b.innerHTML = svg; return b; }
+  function bouton(cls, texte, titre, faire) {
+    const b = el('button', cls, texte);
+    b.type = 'button';
+    if (titre) { b.title = titre; b.setAttribute('aria-label', titre); }
+    b.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); if (!b.disabled) faire(b, e); });
+    return b;
+  }
+  function entreesAllerDossier(ctx, zone) {
+    const courant = reglages[cleDossier(ctx)] || '';
+    const n = favListe ? favListe.length : 0;
+    const l = [{ texte: '⭐ Tous les favoris (' + n + ')', actif: !courant, action: function () { reglages[cleDossier(ctx)] = ''; enregistrerReglages(); dessinerFavorisDans(zone); } }];
+    favDossiers.dossiers.forEach(function (d) {
+      l.push({ texte: '📁 ' + d.nom + ' (' + d.ids.length + ')', actif: courant === d.id, action: function () { reglages[cleDossier(ctx)] = d.id; enregistrerReglages(); dessinerFavorisDans(zone); } });
+    });
+    l.push('-');
+    l.push({ texte: '＋ Nouveau dossier…', action: function () { demanderNomDossier('', function (nom) { const d = nouveauDossierFav(nom); reglages[cleDossier(ctx)] = d ? d.id : ''; enregistrerReglages(); apresChangementDossiers(); }); } });
+    const dc = favDossiers.dossiers.filter(function (d) { return d.id === courant; })[0];
+    if (dc) entreesDossier(dc).forEach(function (x) { l.push(x); });
+    return l;
+  }
+  function entreesDeplacer(fs, ctx) {
+    const ids = fs.filter(function (f) { return !f.horsFavoris; }).map(function (f) { return f.id; });
+    const l = favDossiers.dossiers.map(function (d) {
+      const tous = ids.length && ids.every(function (id) { return d.ids.indexOf(id) !== -1; });
+      return { texte: (tous ? '☑ ' : '📁 ') + d.nom, actif: tous, action: function () { selDe(ctx).clear(); deplacer(ids, d); } };
+    });
+    if (ids.some(function (id) { return dossierDe(id); })) l.push({ texte: ids.length > 1 ? 'Sortir de leur dossier' : 'Sortir du dossier', action: function () { selDe(ctx).clear(); deplacer(ids, null); } });
+    if (l.length) l.push('-');
+    l.push({ texte: '＋ Nouveau dossier…', action: function () { demanderNomDossier('', function (nom) { selDe(ctx).clear(); const d = nouveauDossierFav(nom); if (d) deplacer(ids, d); else apresChangementDossiers(); }); } });
+    return l;
+  }
+  function copierLien(u) {
+    try { navigator.clipboard.writeText(u).then(function () { favMessage = '✔ Lien copié.'; redessinerFavoris(); setTimeout(function () { if (favMessage === '✔ Lien copié.') { favMessage = ''; redessinerFavoris(); } }, 2500); }, function () { window.prompt('Lien :', u); }); } catch (e) { window.prompt('Lien :', u); }
+  }
+
+  function ouvrirMenuSujets(fs, ctx, item, ancre, x, y) {
+    const favs = fs.filter(function (f) { return !f.horsFavoris; });
+    const l = [];
+    if (fs.length > 1) l.push({ titre: fs.length + ' sujets sélectionnés' });
+    const rapide = [];
+    if (favs.length) rapide.push({ texte: '📁', titre: 'Déplacer vers…', action: function () { ouvrirMenuFav(ancre, entreesDeplacer(favs, ctx), x, y); } });
+    if (favs.length) rapide.push({ texte: '★', titre: favs.length > 1 ? 'Retirer ces ' + favs.length + ' sujets des favoris' : 'Retirer des favoris', danger: true, action: function () { selDe(ctx).clear(); retirerFavoris(favs); } });
+    if (fs.length === 1) rapide.push({ texte: '🔗', titre: 'Copier le lien', action: function () { copierLien(lienAbsolu(fs[0], item)); } });
+    if (rapide.length) l.push({ rangee: rapide });
+    if (fs.length === 1) {
+      const f = fs[0];
+      l.push({ texte: 'Ouvrir', action: function () { const a = item && (item.matches('a[href]') ? item : item.querySelector('a[href]')); if (a) a.click(); else location.href = lienAbsolu(f, item); } });
+      l.push({ texte: '↗ Ouvrir dans un nouvel onglet', action: function () { window.open(lienAbsolu(f, item), '_blank', 'noopener'); } });
+      if (f.horsFavoris) l.push({ texte: '☆ Ajouter aux favoris', action: function () { exclureMien(f.id, false); ajouterFavori(f); } });
+    }
+    if (favs.length) {
+      l.push('-');
+      l.push({ texte: 'Déplacer vers ▸', action: function () { ouvrirMenuFav(ancre, entreesDeplacer(favs, ctx), x, y); } });
+      if (favs.some(function (f) { return dossierDe(f.id); })) l.push({ texte: favs.length > 1 ? 'Sortir de leur dossier' : 'Sortir du dossier', action: function () { selDe(ctx).clear(); deplacer(favs.map(function (f) { return f.id; }), null); } });
+      l.push('-');
+      l.push({ texte: favs.length > 1 ? '★ Retirer ces ' + favs.length + ' sujets des favoris' : '★ Retirer des favoris', danger: true, action: function () { selDe(ctx).clear(); retirerFavoris(favs); } });
+    }
+    ouvrirMenuFav(ancre, l, x, y);
+  }
+
+  function dessinerFavorisDans(zone) {
+    if (!zone || !zone.isConnected) return;
+    const ctx = zone.getAttribute('data-favw-contexte') || 'widget';
+    let infos = {};
+    try { infos = JSON.parse(zone.getAttribute('data-favw-infos') || '{}') || {}; } catch (e) { infos = {}; }
+    favZones.add(zone);
+    const ancien = zone.querySelector('.sbp-fav-corps');
+    const defile = ancien ? ancien.scrollTop : 0;
+    const chercheFocus = !!(document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('sbp-fav-cherche') && zone.contains(document.activeElement));
+    zone.textContent = '';
+    zone.classList.add('sbp-fav-zone');
+    zone.setAttribute('data-ctx', ctx);
+    const redessiner = function () { dessinerFavorisDans(zone); };
+    let vue = reglages[cleVue(ctx)];
+    if (!VUES_FAV.some(function (v) { return v[0] === vue; })) vue = 'liste';
+    const dCourant = favDossiers.dossiers.filter(function (d) { return d.id === reglages[cleDossier(ctx)]; })[0] || null;
+    const S = selDe(ctx);
+    if (favListe) S.forEach(function (id) { if (!favListe.some(function (f) { return f.id === id; })) S.delete(id); });
+    if (!S.size) favDoigt[ctx] = false;
+    zone.toggleAttribute('data-selection', S.size > 0);
+    const choisis = function () { return (favListe || []).filter(function (f) { return S.has(f.id); }); };
+    let hote = zone;
+
+    if (ctx === 'fenetre') {
+      const volet = el('nav', 'sbp-fav-volet');
+      const ligneVolet = function (texte, nb, d) {
+        const b = bouton('sbp-fav-volet-ligne' + ((d ? d.id : '') === (dCourant ? dCourant.id : '') ? ' sbp-actif' : ''), '', d ? 'Dossier « ' + d.nom + ' » (clic droit : renommer / supprimer ; glisse des sujets ici pour les y ranger)' : 'Tous les favoris (glisse des sujets ici pour les sortir de leur dossier)', function () { reglages[cleDossier(ctx)] = d ? d.id : ''; enregistrerReglages(); redessiner(); });
+        b.appendChild(el('span', 'sbp-fav-volet-nom', texte));
+        b.appendChild(el('span', 'sbp-fav-volet-nb', String(nb)));
+        cibleDepot(b, d);
+        if (d) b.addEventListener('contextmenu', function (e) { e.preventDefault(); e.stopPropagation(); ouvrirMenuFav(null, entreesDossier(d), e.clientX, e.clientY); });
+        volet.appendChild(b);
+      };
+      ligneVolet('⭐ Favoris', favListe ? favListe.length : 0, null);
+      favDossiers.dossiers.forEach(function (d) { ligneVolet('📁 ' + d.nom, d.ids.length, d); });
+      volet.appendChild(bouton('sbp-fav-volet-ligne sbp-fav-volet-plus', '＋ Nouveau dossier', 'Nouveau dossier', function () { demanderNomDossier('', function (nom) { const d = nouveauDossierFav(nom); reglages[cleDossier(ctx)] = d ? d.id : ''; enregistrerReglages(); apresChangementDossiers(); }); }));
+      zone.appendChild(volet);
+      hote = el('div', 'sbp-fav-principal');
+      zone.appendChild(hote);
+    }
+
+    const adr = el('div', 'sbp-fav-adresse');
+    const miette = function (texte, d) {
+      const b = bouton('sbp-fav-miette' + (d === dCourant ? ' sbp-actif' : ''), texte, d ? 'Dossier « ' + d.nom + ' »' : 'Tous les favoris (glisse des sujets ici pour les sortir de leur dossier)', function () { reglages[cleDossier(ctx)] = d ? d.id : ''; enregistrerReglages(); redessiner(); });
+      cibleDepot(b, d);
+      return b;
+    };
+    adr.appendChild(miette('⭐ Favoris', null));
+    if (dCourant) { adr.appendChild(el('span', 'sbp-fav-chevron', '›')); adr.appendChild(miette('📁 ' + dCourant.nom, dCourant)); }
+    adr.appendChild(boutonIco('sbp-fav-ico sbp-fav-dossiers', ICO_FAV.chevron, 'Dossiers : aller dans un dossier, en créer, renommer, supprimer', function (b) { ouvrirMenuFav(b, entreesAllerDossier(ctx, zone)); }));
+    adr.appendChild(el('span', 'sbp-fav-espace'));
+
+    const rel = boutonIco('sbp-fav-ico', ICO_FAV.relire, 'Relire la liste du site', function (b) { b.disabled = true; relireEtRedessiner(true); });
+    adr.appendChild(rel);
+    if (ctx !== 'fenetre') adr.appendChild(boutonIco('sbp-fav-ico', ICO_FAV.agrandir, 'Ouvrir les favoris en grand', function () { ouvrirFenetreFavoris(); }));
+    hote.appendChild(adr);
+
+    const cmd = el('div', 'sbp-fav-commandes');
+    const n = S.size;
+    const cmdB = function (texte, mot, titre, faire, inactif) {
+      const b = bouton('sbp-fav-cmd', '', titre, faire);
+      const ic = el('span', 'sbp-fav-cmd-ico');
+      if (/^<svg/.test(texte)) ic.innerHTML = texte; else ic.textContent = texte;
+      b.appendChild(ic);
+      b.appendChild(el('span', 'sbp-fav-cmd-mot', mot));
+      b.disabled = !!inactif;
+      cmd.appendChild(b);
+      return b;
+    };
+    cmdB(ICO_FAV.dossierPlus, 'Dossier', 'Nouveau dossier', function () { demanderNomDossier('', function (nom) { const ch = choisis().map(function (f) { return f.id; }); S.clear(); const d = nouveauDossierFav(nom); if (d && ch.length) deplacer(ch, d); reglages[cleDossier(ctx)] = d ? d.id : ''; enregistrerReglages(); apresChangementDossiers(); }); });
+
+    cmdB(ICO_FAV.crayon, 'Renommer', dCourant ? 'Renommer le dossier « ' + dCourant.nom + ' »' : 'Renommer (ouvre d\'abord un dossier)', function () { entreesDossier(dCourant)[0].action(); }, !dCourant);
+    cmd.appendChild(el('span', 'sbp-fav-cmd-sep'));
+    const triNom = (TRIS_FAV.filter(function (t) { return t[0] === reglages.favTri; })[0] || TRIS_FAV[0])[1];
+    cmdB(ICO_FAV.trier, 'Trier', 'Trier : ' + triNom + (reglages.favTriInverse ? ' (décroissant)' : ''), function (b) {
+      const l = TRIS_FAV.map(function (t) { return { texte: (reglages.favTri === t[0] ? '● ' : '○ ') + t[1], actif: reglages.favTri === t[0], action: function () { reglages.favTri = t[0]; enregistrerReglages(); redessinerFavoris(); } }; });
+      l.push('-');
+      l.push({ texte: (!reglages.favTriInverse ? '● ' : '○ ') + 'Croissant', action: function () { reglages.favTriInverse = false; enregistrerReglages(); redessinerFavoris(); } });
+      l.push({ texte: (reglages.favTriInverse ? '● ' : '○ ') + 'Décroissant', action: function () { reglages.favTriInverse = true; enregistrerReglages(); redessinerFavoris(); } });
+      l.push('-');
+      l.push({ texte: (reglages.favGrouper !== false ? '☑ ' : '☐ ') + 'Regrouper : Nouveaux › Mes topics › Favoris', action: function () { reglages.favGrouper = reglages.favGrouper === false; enregistrerReglages(); redessinerFavoris(); } });
+      ouvrirMenuFav(b, l);
+    });
+
+    const segVue = el('span', 'sbp-fav-vues');
+    segVue.setAttribute('role', 'group');
+    segVue.setAttribute('aria-label', 'Affichage');
+    VUES_FAV.forEach(function (v) {
+      const b = boutonIco('sbp-fav-vue', v[0] === 'grille' ? ICO_FAV.grille : ICO_FAV.liste, v[1] + ' : ' + v[2], function () { if (vue === v[0]) return; reglages[cleVue(ctx)] = v[0]; enregistrerReglages(); redessiner(); });
+      b.setAttribute('aria-pressed', String(vue === v[0]));
+      segVue.appendChild(b);
+    });
+    cmd.appendChild(segVue);
+    const nf = nbFiltres();
+    const bFil = cmdB(ICO_FAV.filtre, 'Filtrer', nf ? nf + ' filtre(s) actif(s)' : 'Filtrer : nouveaux messages, mes topics, NSFW, tags', function (b) {
+      const F = filtresFav();
+      const bascule = function (k) { return function () { F[k] = !F[k]; enregistrerReglages(); redessinerFavoris(); setTimeout(function () { const nb = zone.querySelector('.sbp-fav-filtre-btn'); if (nb) nb.click(); }, 0); }; };
+      const l = [
+        { texte: (F.nouveaux ? '☑ ' : '☐ ') + '🔴 Nouveaux messages', action: bascule('nouveaux') },
+        { texte: (F.mes ? '☑ ' : '☐ ') + '✎ Mes topics', action: bascule('mes') },
+
+        { tag: ['NSFW', 'rgb(222,143,215)', '#3b0f36'], nsfw: true, coche: !!F.roses, texte: 'NSFW', action: bascule('roses') },
+      ];
+      const ti = lireInfosSujets();
+      const tags = {};
+      (favListe || []).forEach(function (f) { ((ti[f.id] || {}).g || []).forEach(function (t) { tags[t] = (tags[t] || 0) + 1; }); });
+
+      const noms = TAGS_FORUM.map(function (t) { return t[0]; });
+      Object.keys(tags).concat(F.tags).forEach(function (t) { if (noms.indexOf(t) === -1) noms.push(t); });
+      if (noms.length) {
+        l.push('-');
+        l.push({ titre: 'Tags' });
+        noms.forEach(function (t) {
+          const on = F.tags.indexOf(t) !== -1;
+          const c = TAGS_FORUM.filter(function (x) { return x[0] === t; })[0] || [t, 'rgb(108,117,125)', 'white'];
+          l.push({ tag: c, coche: on, nb: tags[t] || 0, texte: t, action: function () { if (on) F.tags = F.tags.filter(function (x) { return x !== t; }); else F.tags.push(t); enregistrerReglages(); redessinerFavoris(); setTimeout(function () { const nb = zone.querySelector('.sbp-fav-filtre-btn'); if (nb) nb.click(); }, 0); } });
+        });
+      }
+      if (nf) { l.push('-'); l.push({ texte: 'Effacer les filtres', action: function () { reglages.favFiltres = { tags: [] }; enregistrerReglages(); redessinerFavoris(); } }); }
+      ouvrirMenuFav(b, l);
+    });
+    bFil.classList.add('sbp-fav-filtre-btn');
+    if (nf) { bFil.classList.add('sbp-actif'); bFil.appendChild(el('span', 'sbp-fav-cmd-nb', String(nf))); }
+    if (false) {
+      cmd.appendChild(el('span', 'sbp-fav-espace'));
+    }
+    hote.appendChild(cmd);
+
+    if (nf) {
+      const F = filtresFav();
+      const lf = el('div', 'sbp-fav-filtres');
+      lf.appendChild(el('span', 'sbp-fav-filtres-titre', 'Filtré :'));
+      const mots = [];
+      if (F.nouveaux) mots.push(['nouveaux', 'Nouveaux']);
+      if (F.mes) mots.push(['mes', 'Mes topics']);
+      if (F.roses) mots.push(['roses', 'NSFW']);
+      F.tags.forEach(function (t) { mots.push(['tag:' + t, t]); });
+      mots.forEach(function (m) {
+        lf.appendChild(bouton('sbp-fav-filtre', m[1] + ' ✕', 'Retirer ce filtre', function () {
+          if (m[0].indexOf('tag:') === 0) F.tags = F.tags.filter(function (x) { return x !== m[0].slice(4); }); else F[m[0]] = false;
+          enregistrerReglages(); redessinerFavoris();
+        }));
+      });
+      hote.appendChild(lf);
+    }
+
+    {
+      const chB = el('div', 'sbp-fav-cherche-boite');
+      chB.innerHTML = ICO_FAV.loupe;
+      const ch = el('input', 'sbp-fav-cherche');
+      ch.type = 'search';
+      ch.placeholder = 'Rechercher dans ' + (dCourant ? dCourant.nom : 'les favoris') + '…';
+      ch.value = favRecherche[ctx] || '';
+      ch.addEventListener('keydown', function (e) { e.stopPropagation(); if (e.key === 'Escape' && ch.value) { e.preventDefault(); ch.value = ''; ch.dispatchEvent(new Event('input')); } });
+      ch.addEventListener('input', function () {
+        favRecherche[ctx] = ch.value;
+        const q = ch.value.trim().toLowerCase();
+        let vus = 0;
+        hote.querySelectorAll('.sbp-fav-corps [data-sbp-fav-item]').forEach(function (x) { const ok = !q || (x.getAttribute('data-sbp-fav-titre') || '').indexOf(q) !== -1; x.style.display = ok ? '' : 'none'; if (ok) vus++; });
+        hote.querySelectorAll('.sbp-fav-corps .sbp-fav-groupe').forEach(function (g) {
+          let s = g.nextElementSibling, vu = false;
+          while (s && !s.classList.contains('sbp-fav-groupe')) { if (s.style.display !== 'none' && s.hasAttribute('data-sbp-fav-item')) vu = true; s = s.nextElementSibling; }
+          g.style.display = vu || g.hasAttribute('data-ferme') ? '' : 'none';
+        });
+        const et = hote.querySelector('.sbp-fav-etat-nb');
+        if (et) et.textContent = vus + ' sujet' + (vus > 1 ? 's' : '');
+      });
+      chB.appendChild(ch);
+      hote.appendChild(chB);
+      if (chercheFocus) setTimeout(function () { ch.focus(); const v = ch.value; ch.value = ''; ch.value = v; }, 0);
+    }
+
+    if (favAnnuler) {
+      const a = favAnnuler;
+      const ban = el('div', 'sbp-fav-bandeau');
+      ban.appendChild(el('span', 'sbp-fav-bandeau-texte', a.liste.length > 1 ? a.liste.length + ' sujets retirés de tes favoris.' : '« ' + a.liste[0].f.titre + ' » retiré de tes favoris.'));
+      ban.appendChild(bouton('eco-btn', 'Annuler', '', function () { annulerRetrait(); }));
+      hote.appendChild(ban);
+    }
+    const prop = propositionMesTopics();
+    if (prop) hote.appendChild(prop);
+    if (favMessage) hote.appendChild(el('div', 'eco-statut sbp-fav-erreur', favMessage));
+
+    const corps = el('div', 'sbp-fav-corps');
+    corps.setAttribute('data-vue', vue);
+    hote.appendChild(corps);
+    const etatB = el('div', 'sbp-fav-etat');
+    const etatNb = el('span', 'sbp-fav-etat-nb', '');
+    etatB.appendChild(etatNb);
+    if (n) etatB.appendChild(el('span', 'sbp-fav-etat-sel', n + ' sélectionné' + (n > 1 ? 's' : '')));
+    if (!favListe) {
+      corps.appendChild(el('div', 'sbp-fav-vide', favErreur ? 'Favoris illisibles (' + favErreur + ').' : 'Lecture des favoris…'));
+      hote.appendChild(etatB);
+      return;
+    }
+    const etat = etatNotifs();
+    const ti = lireInfosSujets();
+    const ordreSite = new Map();
+    favListe.forEach(function (f, i) { ordreSite.set(f.id, i); });
+    const estMien = function (f) { return !!((infos[f.id] && infos[f.id].moi) || (etat && etat.suivis[f.id] && etat.suivis[f.id].moi)); };
+    const estNouveau = function (f) { return !!((infos[f.id] && infos[f.id].badge) || (etat && nonLu(etat.suivis[f.id]))); };
+    let mesHors = [];
+
+    if (false && etat && !dCourant) {
+      Object.keys(etat.suivis).forEach(function (id) {
+        const x = etat.suivis[id];
+        if (!x || !x.moi || ordreSite.has(id)) return;
+        mesHors.push({ id: id, titre: x.titre || ('Topic n° ' + id), slug: x.slug || '', horsFavoris: true });
+      });
+    }
+    let liste = favListe.slice();
+    if (dCourant) liste = liste.filter(function (f) { return dCourant.ids.indexOf(f.id) !== -1; });
+    const F = filtresFav();
+    const passe = function (f) {
+      const t = ti[f.id] || {};
+      if (F.nouveaux && !estNouveau(f)) return false;
+      if (F.mes && !(estMien(f) || f.horsFavoris)) return false;
+      if (F.roses && !(f.rose || t.p)) return false;
+
+      if (F.tags.length && !(t.g || []).some(function (g) { return F.tags.indexOf(g) !== -1; })) return false;
+      return true;
+    };
+    const tout = liste.concat(mesHors).filter(passe);
+    etatNb.textContent = tout.length + ' sujet' + (tout.length > 1 ? 's' : '') + (tout.length !== favListe.length + mesHors.length && (nf || dCourant) ? ' sur ' + (favListe.length + mesHors.length) : '');
+    if (!tout.length) {
+      corps.appendChild(el('div', 'sbp-fav-vide', nf ? 'Aucun sujet avec ces filtres.' : dCourant ? 'Dossier vide : glisse des sujets sur son nom, ou 📁 Déplacer.' : 'Aucun sujet favori.'));
+      hote.appendChild(etatB);
+      return;
+    }
+
+    const groupes = [];
+    if (reglages.favGrouper !== false) {
+      const nouveauxL = tout.filter(estNouveau);
+      const reste = tout.filter(function (f) { return !estNouveau(f); });
+      const nv = trierFavoris(nouveauxL.filter(function (f) { return estMien(f) || f.horsFavoris; }), ordreSite, etat).concat(trierFavoris(nouveauxL.filter(function (f) { return !(estMien(f) || f.horsFavoris); }), ordreSite, etat));
+      const miens = trierFavoris(reste.filter(function (f) { return estMien(f) || f.horsFavoris; }), ordreSite, etat);
+      const autres = trierFavoris(reste.filter(function (f) { return !(estMien(f) || f.horsFavoris); }), ordreSite, etat);
+      if (nv.length) groupes.push(['nouveaux', '🔴 Nouveaux messages', nv]);
+      if (miens.length) groupes.push(['mes', '✎ Mes topics', miens]);
+      if (autres.length) groupes.push(['favoris', '⭐ Favoris', autres]);
+      if (groupes.length === 1) groupes[0][1] = null;
+    } else groupes.push(['tout', null, trierFavoris(tout, ordreSite, etat)]);
+    const fermes = reglages.favGroupesFermes && typeof reglages.favGroupesFermes === 'object' ? reglages.favGroupesFermes : (reglages.favGroupesFermes = {});
+    const ordreVisible = [];
+    if (vue === 'details') {
+      const ent = el('div', 'sbp-fav-det-entete');
+      const col = function (cls, texte, tri) {
+        const b = bouton('sbp-fav-det-col ' + cls + (reglages.favTri === tri ? ' sbp-actif' : ''), texte + (reglages.favTri === tri ? (reglages.favTriInverse ? ' ▼' : ' ▲') : ''), 'Trier par « ' + texte + ' » (re-clic : inverser)', function () {
+          if (reglages.favTri === tri) reglages.favTriInverse = !reglages.favTriInverse; else { reglages.favTri = tri; reglages.favTriInverse = false; }
+          enregistrerReglages(); redessinerFavoris();
+        });
+        ent.appendChild(b);
+      };
+      ent.appendChild(el('span', 'sbp-fav-det-case'));
+      col('sbp-fav-det-nom', 'Nom', 'alpha');
+      col('sbp-fav-det-nb', 'Msg', 'messages');
+      col('sbp-fav-det-der', 'Dernier', 'dernier');
+      corps.appendChild(ent);
+    }
+    groupes.forEach(function (g) {
+      if (g[1]) {
+        const ferme = !!fermes[g[0]];
+        const sep = bouton('sbp-fav-groupe', '', ferme ? 'Déplier' : 'Replier', function () { fermes[g[0]] = !ferme; enregistrerReglages(); redessiner(); });
+        if (ferme) sep.setAttribute('data-ferme', '');
+        sep.appendChild(el('span', 'sbp-fav-groupe-fleche', ferme ? '▸' : '▾'));
+        sep.appendChild(el('span', null, g[1] + ' (' + g[2].length + ')'));
+        sep.appendChild(el('span', 'sbp-fav-groupe-trait'));
+        corps.appendChild(sep);
+        if (ferme) return;
+      }
+      g[2].forEach(function (f) {
+        ordreVisible.push(f.id);
+        corps.appendChild(elementSujet(f, vue, infos[f.id] || null, ctx, estMien(f) || f.horsFavoris, zone, ordreVisible));
+      });
+    });
+    hote.appendChild(etatB);
+    if (defile) corps.scrollTop = defile;
+    if (favRecherche[ctx]) { const c = hote.querySelector('.sbp-fav-cherche'); if (c) c.dispatchEvent(new Event('input')); }
+  }
+
+  function elementSujet(f, vue, info, ctx, mien, zone, ordreVisible) {
+    const ti = lireInfosSujetsMemo()[f.id] || {};
+    let item, lien;
+    if (vue === 'liste') {
+      const rangee = ligneForum(f, info, ti, mien);
+      if (rangee) {
+        item = el('div', 'sbp-fav-rangee');
+        lien = rangee.querySelector('a.topic-link');
+        item.appendChild(rangee);
+      }
+    }
+    if (!item && vue === 'details') {
+      item = el('a', 'sbp-fav-det');
+      lien = item;
+      const nom = el('span', 'sbp-fav-det-nom');
+      const ic = document.createElement('img');
+      ic.className = 'sbp-fav-det-ico';
+      ic.alt = '';
+      ic.src = f.rose || ti.p ? DOSSIER_ROSE : (ti.n || 0) > 20 ? DOSSIER_CHAUD : DOSSIER_NORMAL;
+      nom.appendChild(ic);
+      nom.appendChild(el('span', 'sbp-fav-det-titre', (mien ? '✎ ' : '') + (ti.k ? '🔒 ' : '') + f.titre));
+      if (info && info.badge) { const bd = el('span', 'sbp-fav-badge', info.badge); if (info.badgeStyle) bd.style.cssText = info.badgeStyle; nom.appendChild(bd); }
+      const dos = dossierDe(f.id);
+      if (dos && !reglages[cleDossier(ctx)]) nom.appendChild(el('span', 'sbp-fav-dossier', dos.nom));
+      item.appendChild(el('span', 'sbp-fav-det-case'));
+      item.appendChild(nom);
+      item.appendChild(el('span', 'sbp-fav-det-nb', ti.n != null ? String(ti.n) : '—'));
+      item.appendChild(el('span', 'sbp-fav-det-der', deltaTexte(ti.d)));
+    }
+    if (!item) {
+      item = el('a', vue === 'grille' ? 'sbp-fav-carte' : 'sbp-fav-ligne');
+      lien = item;
+      const titre = el('span', 'sbp-fav-titre', f.titre);
+      const badge = info && info.badge ? el('span', 'sbp-fav-badge', info.badge) : null;
+      if (badge && info.badgeStyle) badge.style.cssText = info.badgeStyle;
+      if (vue === 'grille') {
+        item.setAttribute('data-sbp-fav-id', f.id);
+        const im = el('span', 'sbp-fav-image');
+        if (badge) im.appendChild(badge);
+        item.appendChild(im);
+        item.appendChild(titre);
+        observerVignette(item);
+      } else {
+        if (mien) item.appendChild(el('span', 'sbp-fav-icone', '✎'));
+        item.appendChild(titre);
+        if (badge) item.appendChild(badge);
+      }
+    }
+    lien.href = (info && info.lien) || cheminSujet(f);
+    lien.title = f.titre;
+    lien.setAttribute('data-sbp-fav-sujet', f.id);
+    lien.addEventListener('click', allerSujet);
+    item.setAttribute('data-sbp-fav-item', f.id);
+    item.setAttribute('data-sbp-fav-titre', String(f.titre || '').toLowerCase());
+    if (f.rose) item.setAttribute('data-rose', '');
+    if (info && info.badge) item.setAttribute('data-nouveau', '');
+    if (favRetraits[f.id]) item.setAttribute('data-retrait', '');
+    if (f.horsFavoris) item.setAttribute('data-hors-favoris', '');
+
+    const acts = el('span', 'sbp-fav-actions');
+    if (!f.horsFavoris) {
+
+      acts.appendChild(boutonIco('sbp-fav-retirer sbp-fav-ranger' + (dossierDe(f.id) ? ' sbp-fav-range' : ''), dossierDe(f.id) ? ICO_FAV.dossierPlein : ICO_FAV.dossier, dossierDe(f.id) ? 'Ranger (dossier : ' + dossierDe(f.id).nom + ')' : 'Ranger dans un dossier', function (b) { ouvrirMenuFav(b, entreesDeplacer([f], ctx)); }));
+      acts.appendChild(boutonIco('sbp-fav-retirer sbp-fav-etoile', ICO_FAV.etoile, 'Retirer des favoris (Annuler possible)', function () { retirerFavoris([f]); }));
+    } else acts.appendChild(boutonIco('sbp-fav-retirer sbp-fav-ajouter', ICO_FAV.etoileVide, 'Ajouter aux favoris', function () { exclureMien(f.id, false); ajouterFavori(f); }));
+    item.appendChild(acts);
+
+    if (vue !== 'grille' && ti.n == null && !(favEchecs[f.id] && Date.now() - favEchecs[f.id] < 600000)) { item.setAttribute('data-sbp-fav-id', f.id); item.setAttribute('data-sbp-fav-infos', ''); observerVignette(item); }
+    gestesSujet(item, f, ctx, zone, ordreVisible);
+    return item;
+  }
+
+  function basculerSel(ctx, id, zone) {
+    const S = selDe(ctx);
+    if (S.has(id)) S.delete(id); else S.add(id);
+    favAncre[ctx] = id;
+    dessinerFavorisDans(zone);
+  }
+  function gestesSujet(item, f, ctx, zone, ordreVisible) {
+    void ordreVisible;
+    item.addEventListener('click', function (e) {
+      if (Date.now() < (favIgnorer[ctx] || 0)) { e.preventDefault(); e.stopPropagation(); }
+    }, true);
+
+    item.draggable = !f.horsFavoris;
+    item.addEventListener('dragstart', function (e) {
+      favGlisse = [f.id];
+      try { e.dataTransfer.setData('text/uri-list', lienAbsolu(f, item)); e.dataTransfer.effectAllowed = 'copyMove'; } catch (er) {  }
+      item.classList.add('sbp-glisse');
+    });
+    item.addEventListener('dragend', function () {
+      favGlisse = null;
+      item.classList.remove('sbp-glisse');
+      document.querySelectorAll('.sbp-cible').forEach(function (p) { p.classList.remove('sbp-cible'); });
+    });
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    let fait = false;
+    Object.keys(favSel).forEach(function (ctx) { if (favSel[ctx].size) { favSel[ctx].clear(); fait = true; } });
+    if (fait) { redessinerFavoris(); return; }
+    if (fenetreFav && !favMenu && !document.querySelector('.sbp-fav-saisie')) fermerFenetreFavoris();
+  });
+
+  let fenetreFav = null;
+  function fermerFenetreFavoris() {
+    if (!fenetreFav) return;
+    fenetreFav.remove();
+    fenetreFav = null;
+    if (favSel.fenetre) favSel.fenetre.clear();
+  }
+  function ouvrirFenetreFavoris() {
+    if (!reglages.favoris) return;
+    if (fenetreFav && fenetreFav.isConnected) return;
+    const fond = el('div', 'sbp-fav-fond');
+    fond.setAttribute('data-eco-ui', '');
+    fond.setAttribute('data-sbp-fav', '');
+    const fen = el('div', 'sbp-fav-fenetre');
+    fen.setAttribute('role', 'dialog');
+    fen.setAttribute('aria-label', 'Explorateur des favoris');
+    const tete = el('div', 'sbp-fav-fenetre-tete');
+    tete.appendChild(el('span', 'sbp-fav-fenetre-titre', '⭐ Favoris — Explorateur'));
+    tete.appendChild(bouton('sbp-fav-ico', '✕', 'Fermer (Échap)', fermerFenetreFavoris));
+    fen.appendChild(tete);
+    const zone = el('div', 'sbp-fav-zone');
+    zone.setAttribute('data-sbp-fav', '');
+    zone.setAttribute('data-favw-contexte', 'fenetre');
+    fen.appendChild(zone);
+    fond.appendChild(fen);
+    fond.addEventListener('pointerdown', function (e) { if (e.target === fond) fond._dehors = true; });
+    fond.addEventListener('click', function (e) { if (e.target === fond && fond._dehors) fermerFenetreFavoris(); fond._dehors = false; });
+    document.body.appendChild(fond);
+    fenetreFav = fond;
+    dessinerFavorisDans(zone);
+    relireEtRedessiner(false);
+  }
+  document.addEventListener('eco-favoris-explorer', function () { ouvrirFenetreFavoris(); });
+
+  let favMesVus = GM_getValue('favMesVus', null);
+  let favMesExclus = GM_getValue('favMesExclus', []);
+  if (!Array.isArray(favMesExclus)) favMesExclus = [];
+  let favMesEnCours = false;
+  let favMesRefus = false;
+  function mesTopicsIds() { const e = etatNotifs(); return e ? Object.keys(e.suivis).filter(function (id) { return e.suivis[id] && e.suivis[id].moi; }) : []; }
+  function exclureMien(id, oui) {
+    id = String(id);
+    const i = favMesExclus.indexOf(id);
+    if (oui && i === -1) favMesExclus.push(id);
+    if (!oui && i !== -1) favMesExclus.splice(i, 1);
+    GM_setValue('favMesExclus', favMesExclus);
+  }
+  function candidatsMesTopics() {
+    if (!favListe) return [];
+    const dans = new Set(favListe.map(function (f) { return f.id; }));
+    return mesTopicsIds().filter(function (id) { return !dans.has(id) && favMesExclus.indexOf(id) === -1; });
+  }
+  async function ajouterMesTopics(ids) {
+    if (favMesEnCours || !ids.length) return;
+    favMesEnCours = true;
+    let ok = 0;
+    for (let i = 0; i < ids.length; i++) {
+      try {
+        let r = await basculerFavoriSite(ids[i]);
+        if (r === false) r = await basculerFavoriSite(ids[i]);
+        if (r !== false) ok++;
+      } catch (e) {  }
+      if (ids.length > 1) await new Promise(function (x) { setTimeout(x, 300); });
+    }
+    favMesEnCours = false;
+    if (ok) { signalerChangement(); relireEtRedessiner(true); }
+  }
+  function verifierMesTopicsAuto() {
+    const mode = reglages.favMesAuto || 'tous';
+    if (!reglages.favoris || mode === 'non' || !favListe || favMesEnCours) return;
+    const miens = mesTopicsIds();
+
+    if (mode === 'tous') {
+      favMesVus = (Array.isArray(favMesVus) ? favMesVus : []).concat(miens.filter(function (id) { return !Array.isArray(favMesVus) || favMesVus.indexOf(id) === -1; })).slice(-2000);
+      GM_setValue('favMesVus', favMesVus);
+      ajouterMesTopics(candidatsMesTopics());
+      return;
+    }
+    if (!Array.isArray(favMesVus)) { favMesVus = miens.slice(); GM_setValue('favMesVus', favMesVus); return; }
+    const nouveaux = miens.filter(function (id) { return favMesVus.indexOf(id) === -1; });
+    if (!nouveaux.length) return;
+    favMesVus = favMesVus.concat(nouveaux).slice(-2000);
+    GM_setValue('favMesVus', favMesVus);
+    const dans = new Set(favListe.map(function (f) { return f.id; }));
+    ajouterMesTopics(nouveaux.filter(function (id) { return !dans.has(id) && favMesExclus.indexOf(id) === -1; }));
+  }
+
+  function propositionMesTopics() {
+    if (true || (reglages.favMesAuto || 'creation') !== 'tous' || favMesRefus || favMesEnCours) return null;
+    const ids = candidatsMesTopics();
+    if (!ids.length) return null;
+    const e = etatNotifs();
+    const titres = ids.map(function (id) { return (e && e.suivis[id] && e.suivis[id].titre) || ('n° ' + id); });
+    const b = el('div', 'sbp-fav-bandeau sbp-fav-proposition');
+    b.appendChild(el('span', 'sbp-fav-bandeau-texte', (ids.length > 1 ? ids.length + ' de tes topics ne sont pas' : '1 de tes topics n\'est pas') + ' dans tes favoris : ' + titres.slice(0, 5).join(', ') + (titres.length > 5 ? '…' : '') + '.'));
+    b.appendChild(bouton('eco-btn eco-btn-pri', 'Ajouter ' + (ids.length > 1 ? 'les ' + ids.length : 'aux favoris'), 'Les ajoute à tes Sujets favoris du forum, un par un', function () { ajouterMesTopics(ids); redessinerFavoris(); }));
+    b.appendChild(bouton('eco-btn', 'Non merci', 'Ne plus les proposer (ils ne seront pas ajoutés)', function () { ids.forEach(function (id) { exclureMien(id, true); }); favMesRefus = true; redessinerFavoris(); }));
+    return b;
+  }
+  window.addEventListener('storage', function (e) { if (e.key === 'nanachan-notifications-plus') { clearTimeout(verifierMesTopicsAuto._t); verifierMesTopicsAuto._t = setTimeout(verifierMesTopicsAuto, 1500); } });
+  setInterval(verifierMesTopicsAuto, 60000);
+
+  function redessinerFavoris() {
+    favZones.forEach(function (z) { if (!z.isConnected) favZones.delete(z); else dessinerFavorisDans(z); });
+  }
+
+  function widgetFavoris() {
+    const hs = document.querySelectorAll('#app .widget-col .widget > h2');
+    for (let i = 0; i < hs.length; i++) if (/^\s*Favoris\s*$/i.test(hs[i].textContent || '')) return hs[i].parentElement;
+    return null;
+  }
+  function majFavoris() {
+    document.documentElement.toggleAttribute('data-sbp-favoris', !!reglages.favoris);
+    const w = widgetFavoris();
+    document.querySelectorAll('.sbp-fav-btn, .widget > .sbp-fav-zone').forEach(function (x) { if (!w || !w.contains(x) || !reglages.favoris) x.remove(); });
+    if (w) w.toggleAttribute('data-sbp-fav-widget', !!reglages.favoris);
+    if (!w || !reglages.favoris) return;
+    let b = w.querySelector(':scope > .sbp-fav-btn');
+    if (!b) {
+      b = el('button', 'sbp-fav-btn');
+      b.type = 'button';
+      b.setAttribute('data-sbp-fav', '');
+      b.setAttribute('data-eco-ui', '');
+      b.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
+      b.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        reglages.favOuvert = !reglages.favOuvert;
+        enregistrerReglages();
+        majFavoris();
+        if (reglages.favOuvert) relireEtRedessiner(false);
+      });
+      w.appendChild(b);
+    }
+    b.setAttribute('aria-expanded', String(!!reglages.favOuvert));
+    b.title = reglages.favOuvert ? 'Replier la liste des favoris' : 'Dérouler la liste des favoris';
+    b.setAttribute('aria-label', b.title);
+    let zone = w.querySelector(':scope > .sbp-fav-zone');
+    if (!reglages.favOuvert) { if (zone) zone.remove(); return; }
+    if (!zone) {
+      zone = el('div', 'sbp-fav-zone');
+      zone.setAttribute('data-sbp-fav', '');
+      zone.setAttribute('data-eco-ui', '');
+      zone.setAttribute('data-favw-contexte', 'widget');
+      w.appendChild(zone);
+      dessinerFavorisDans(zone);
+      relireEtRedessiner(false);
+    }
+  }
+
+  document.addEventListener('click', function (e) {
+    if (!reglages.favoris || reglages.favTitreFenetre === false || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+    const w = widgetFavoris();
+    const h = w && w.querySelector(':scope > h2');
+    if (!h || !e.target || !h.contains(e.target)) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    ouvrirFenetreFavoris();
+  }, true);
+
+  document.addEventListener('eco-favoris-monter', function (e) {
+    const z = e.target;
+    if (!reglages.favoris || !z || !z.setAttribute) return;
+    z.setAttribute('data-sbp-fav', '');
+    z.setAttribute('data-favw-monte', '');
+    dessinerFavorisDans(z);
+    if (!favListe || Date.now() - favLu > 20000) relireEtRedessiner(false);
+  }, true);
+
+  document.addEventListener('eco-favoris-maj', function () { if (reglages.favoris) setTimeout(function () { relireEtRedessiner(true); }, 600); });
+  (function stylesFavoris() {
+    const st = document.createElement('style');
+    st.setAttribute('data-sbp-fav-style', '');
+    st.textContent = [
+      '#app .widget[data-sbp-fav-widget]{position:relative}',
+      '#app .widget[data-sbp-fav-widget]>h2{padding-right:44px!important}',
+      '.sbp-fav-btn{position:absolute;top:6px;right:10px;display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;padding:0;border:none;border-radius:7px;background:none;color:inherit;opacity:.7;cursor:pointer}',
+      '.sbp-fav-btn:hover,.sbp-fav-btn:focus-visible{opacity:1;background:rgba(127,127,127,.18)}',
+      '.sbp-fav-btn svg{transition:transform .18s}',
+      '.sbp-fav-btn[aria-expanded=true] svg{transform:rotate(180deg)}',
+      '.widget>.sbp-fav-zone{padding:4px 12px 10px 15px}',
+      '[data-favw-contexte=panneau].sbp-fav-zone{padding:6px 10px 8px}',
+      '.sbp-fav-barre{display:flex;align-items:center;gap:8px;margin:2px 0 6px}',
+      '.sbp-fav-nb{font-size:12px;opacity:.65;margin-left:auto}',
+      '.sbp-fav-relire{border:none;background:none;color:inherit;opacity:.65;cursor:pointer;font-size:14px;padding:2px 6px;border-radius:5px}',
+      '.sbp-fav-relire:hover{opacity:1;background:rgba(127,127,127,.18)}',
+      '.sbp-fav-puces{display:flex;flex-wrap:wrap;gap:5px;margin:0 0 8px}',
+      '.sbp-fav-puce{display:inline-flex;align-items:center;gap:5px;max-width:100%;border:1px solid rgba(127,127,127,.35);background:none;color:inherit;border-radius:12px;padding:1px 9px;font-size:12px;line-height:18px;cursor:pointer;opacity:.85}',
+      '.sbp-fav-puce:hover{opacity:1;background:rgba(127,127,127,.15)}',
+      '.sbp-fav-puce.sbp-actif{opacity:1;border-color:var(--button-color,#5C7CAD);background:color-mix(in srgb,var(--button-color,#5C7CAD) 22%,transparent)}',
+      '.sbp-fav-puce.sbp-cible{opacity:1;border-style:dashed;border-color:var(--button-color,#5C7CAD);background:color-mix(in srgb,var(--button-color,#5C7CAD) 30%,transparent)}',
+      '.sbp-fav-puce-nom{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px}',
+      '.sbp-fav-puce-nb{font-size:10.5px;opacity:.6}',
+      '.sbp-fav-puce-plus{border-style:dashed;padding:1px 8px}',
+      '.sbp-fav-puce-opt{border-color:transparent;padding:1px 6px}',
+      '.sbp-fav-bandeau{display:flex;align-items:center;gap:8px;margin:0 0 8px;padding:5px 8px;border-radius:6px;background:rgba(127,127,127,.15);font-size:12.5px}',
+      '.sbp-fav-bandeau-texte{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+      '.sbp-fav-erreur{margin:0 0 8px;font-size:12px}',
+      '.widget .sbp-fav-corps{max-height:340px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}',
+      '.sbp-fav-corps[data-vue=liste]{display:flex;flex-direction:column;gap:1px}',
+      '.sbp-fav-rangee{position:relative;min-width:0}',
+
+      '.sbp-fav-zone .topic .tags{display:none!important}',
+      '.sbp-fav-zone .topic .tags-mobile{display:flex!important;flex-wrap:wrap;gap:4px;margin-top:3px}',
+      '.sbp-fav-zone .topic .tag-container,.sbp-fav-zone .topic .tags-mobile>div{padding:1px 6px!important;border-radius:6px!important;font-size:10.5px!important;line-height:1.5}',
+      '.sbp-fav-zone .topic .hap{flex:1 1 auto;min-width:0}',
+      '.sbp-fav-zone .topic h3.titre{font-size:13.5px;word-break:normal!important;overflow-wrap:anywhere!important}',
+      '.sbp-fav-zone .topic .hap>p{margin:2px 0 0!important;font-size:11.5px;opacity:.8}',
+      '.sbp-fav-zone .topic tr>th:last-child{padding:4px 6px!important;width:auto!important;white-space:nowrap;font-size:12px}',
+      '.sbp-fav-zone .topic tr>th:first-child{width:auto!important}',
+      '.sbp-fav-rangee .topic{cursor:pointer}',
+
+      '.sbp-fav-zone .sbp-fav-actions{opacity:1!important}',
+      '.sbp-fav-plus{border:none;background:rgba(127,127,127,.18);color:inherit;cursor:pointer;font-size:15px;font-weight:bold;line-height:1;min-width:28px;height:26px;padding:0 6px;border-radius:6px;opacity:.8}',
+      '.sbp-fav-plus:hover,.sbp-fav-plus:focus-visible{opacity:1;background:rgba(127,127,127,.35)}',
+      '@media (pointer:coarse){.sbp-fav-plus{min-width:34px;height:32px}}',
+      '.sbp-fav-rangee .sbp-fav-actions{position:absolute;right:4px;top:50%;transform:translateY(-50%);z-index:6}',
+      '.sbp-fav-rangee .topic tr>th:last-child{padding-right:74px!important}',
+
+      '.sbp-fav-actions{display:inline-flex;gap:4px;align-items:center}',
+      '.sbp-fav-retirer{border:none;background:rgba(127,127,127,.18);color:#e3b341;cursor:pointer;font-size:14px;line-height:1;min-width:28px;height:26px;padding:0 6px;border-radius:6px;opacity:.85}',
+      '.sbp-fav-retirer:hover,.sbp-fav-retirer:focus-visible{opacity:1;background:rgba(224,108,108,.25);color:#e06c6c}',
+      '.sbp-fav-ranger{color:inherit}.sbp-fav-ranger:hover,.sbp-fav-ranger:focus-visible{color:inherit;background:rgba(127,127,127,.35)}',
+      '.sbp-fav-ajouter{color:inherit}.sbp-fav-ajouter:hover{color:#e3b341;background:rgba(127,127,127,.35)}',
+      '@media (pointer:coarse){.sbp-fav-retirer{min-width:34px;height:32px}}',
+      '.sbp-fav-carte .sbp-fav-retirer{background:rgba(0,0,0,.6);opacity:.95}',
+      '.sbp-fav-carte .sbp-fav-plus{background:rgba(0,0,0,.6);color:#fff;opacity:.9}',
+      '.sbp-fav-zone [data-sbp-fav-item]{-webkit-touch-callout:none;user-select:none;-webkit-user-select:none}',
+
+      '.sbp-fav-gerer{position:sticky;top:0;z-index:7;display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin:0 0 6px;padding:5px 6px;border-radius:8px;background:var(--container-color,rgba(127,127,127,.12));color:inherit;border:1px solid var(--button-color,#5C7CAD);font-size:12px}',
+      '.sbp-fav-gerer-nb{flex:1 1 100%;font-weight:bold;opacity:.85}',
+      '.sbp-fav-gerer-btn{border:1px solid rgba(127,127,127,.4);background:transparent;color:inherit;cursor:pointer;border-radius:6px;padding:3px 8px;font:inherit}',
+      '.sbp-fav-gerer-btn:hover{background:rgba(127,127,127,.2)}',
+      '.sbp-fav-gerer-btn[disabled]{opacity:.4;cursor:default}',
+      '.sbp-fav-gerer-btn.sbp-danger{color:#e06c6c;border-color:rgba(224,108,108,.5)}',
+      '.sbp-fav-gerer-bouton.sbp-actif{opacity:1;color:var(--button-color,#5C7CAD)}',
+      '.sbp-fav-corps[data-gerer] [data-sbp-fav-item]{position:relative;cursor:pointer}',
+      '.sbp-fav-corps[data-gerer] [data-sbp-fav-item]:not([data-hors-favoris])::before{content:"☐";position:absolute;left:2px;top:2px;z-index:8;font-size:16px;line-height:1;padding:1px 3px;border-radius:4px;background:rgba(0,0,0,.55);color:#fff}',
+      '.sbp-fav-corps[data-gerer] [data-sbp-fav-item][data-choisi]::before{content:"☑";background:var(--button-color,#5C7CAD)}',
+      '.sbp-fav-corps[data-gerer] [data-sbp-fav-item][data-choisi]{outline:2px solid var(--button-color,#5C7CAD);outline-offset:-2px;border-radius:6px}',
+      '.sbp-fav-corps[data-gerer] [data-hors-favoris]{opacity:.5}',
+      '.sbp-fav-corps[data-gerer] .sbp-fav-actions{display:none}',
+
+      '.sbp-fav-zone{--fx-ligne:rgba(127,127,127,.25);--fx-acc:var(--button-color,#5C7CAD);font-size:13px}',
+      '.sbp-fav-adresse{display:flex;align-items:center;gap:2px;min-width:0;margin:0 0 4px;padding:2px 4px;border:1px solid var(--fx-ligne);border-radius:7px}',
+      '.sbp-fav-miette{border:none;background:none;color:inherit;font:inherit;font-weight:600;cursor:pointer;padding:3px 5px;border-radius:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px}',
+      '.sbp-fav-miette:hover,.sbp-fav-miette.sbp-cible{background:rgba(127,127,127,.18)}',
+      '.sbp-fav-miette.sbp-cible{outline:2px dashed var(--fx-acc)}',
+      '.sbp-fav-chevron{opacity:.5;padding:0 1px}',
+      '.sbp-fav-espace{flex:1 1 auto}',
+      '.sbp-fav-ico{border:none;background:none;color:inherit;cursor:pointer;min-width:26px;height:26px;padding:0 5px;border-radius:5px;font-size:13px;opacity:.75}',
+      '.sbp-fav-ico:hover,.sbp-fav-ico.sbp-actif{opacity:1;background:rgba(127,127,127,.18)}',
+      '.sbp-fav-ico[disabled]{opacity:.35;cursor:default}',
+      '.sbp-fav-commandes{display:flex;align-items:center;flex-wrap:wrap;gap:1px;margin:0 0 6px;padding:0 0 5px;border-bottom:1px solid var(--fx-ligne)}',
+      '.sbp-fav-cmd{position:relative;display:inline-flex;align-items:center;gap:4px;border:none;background:none;color:inherit;cursor:pointer;height:28px;padding:0 6px;border-radius:5px;font:inherit;font-size:12px}',
+      '.sbp-fav-cmd:hover:not([disabled]),.sbp-fav-cmd.sbp-actif{background:rgba(127,127,127,.18)}',
+      '.sbp-fav-cmd[disabled]{opacity:.35;cursor:default}',
+      '.sbp-fav-cmd.sbp-danger:not([disabled]){color:#e06c6c}',
+      '.sbp-fav-cmd-ico{font-size:14px;line-height:1;display:inline-flex}',
+
+      '.sbp-svg{width:16px;height:16px;display:block;flex:none}',
+      '.sbp-fav-ico .sbp-svg{width:15px;height:15px}',
+      '.sbp-fav-vues{display:inline-flex;border:1px solid var(--fx-ligne,rgba(127,127,127,.35));border-radius:6px;overflow:hidden;margin:0 2px}',
+      '.sbp-fav-vue{display:inline-flex;align-items:center;justify-content:center;width:28px;height:26px;padding:0;border:0;background:none;color:inherit;cursor:pointer;opacity:.6}',
+      '.sbp-fav-vue+.sbp-fav-vue{border-left:1px solid var(--fx-ligne,rgba(127,127,127,.35))}',
+      '.sbp-fav-vue:hover{opacity:1}',
+      '.sbp-fav-vue[aria-pressed=true]{opacity:1;background:var(--fx-acc,#C9A13B);color:#fff;cursor:default}',
+      '@media (pointer:coarse){.sbp-fav-vue{width:36px;height:34px}}',
+      '.sbp-fav-cherche-boite{position:relative;margin:0 0 6px}',
+      '.sbp-fav-cherche-boite>.sbp-svg{position:absolute;left:8px;top:50%;transform:translateY(-50%);width:14px;height:14px;opacity:.5;pointer-events:none}',
+      '.sbp-fav-cherche-boite>.sbp-fav-cherche{margin:0!important;padding-left:28px!important}',
+      '.sbp-fav-retirer .sbp-svg{width:16px;height:16px}',
+      '.sbp-fav-etoile{color:#F2B526!important}',
+      '.sbp-fav-carte:visited .sbp-fav-titre{color:gray}',
+      '.sbp-fav-menu-item .sbp-fav-menu-coche{display:inline-block;width:1.2em}',
+      '.sbp-fav-tag-pastille{display:inline-block;padding:1px 7px;border-radius:4px;font-size:11.5px;font-weight:bold;line-height:1.5}',
+      '.sbp-fav-menu-nb{margin-left:6px;opacity:.55;font-size:11px}',
+      '.sbp-fav-nsfw{font-size:10px!important;letter-spacing:.3px;padding:1px 5px!important}',
+      '.sbp-fav-etoile:hover,.sbp-fav-etoile:focus-visible{color:#e06c6c!important}',
+      '.sbp-fav-cmd-mot{display:none}',
+      '.sbp-fav-zone[data-ctx=fenetre] .sbp-fav-cmd-mot{display:inline}',
+      '.sbp-fav-cmd-nb{min-width:14px;height:14px;padding:0 3px;border-radius:7px;background:var(--fx-acc);color:#fff;font-size:10px;line-height:14px;text-align:center}',
+      '.sbp-fav-cmd-sep{width:1px;height:18px;margin:0 3px;background:var(--fx-ligne)}',
+      '@media (pointer:coarse){.sbp-fav-cmd,.sbp-fav-ico{min-width:34px;height:34px}}',
+      '.sbp-fav-filtres{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin:0 0 6px;font-size:12px}',
+      '.sbp-fav-filtres-titre{opacity:.7}',
+      '.sbp-fav-filtre{border:1px solid var(--fx-acc);background:color-mix(in srgb,var(--fx-acc) 18%,transparent);color:inherit;border-radius:10px;padding:0 7px;font:inherit;font-size:11.5px;line-height:18px;cursor:pointer}',
+      '.sbp-fav-groupe{display:flex;align-items:center;gap:6px;width:100%;border:none;background:none;color:inherit;cursor:pointer;padding:6px 2px 3px;font:inherit;font-size:11.5px;font-weight:bold;opacity:.75;text-align:left}',
+      '.sbp-fav-groupe:hover{opacity:1}',
+      '.sbp-fav-groupe-fleche{width:10px}',
+      '.sbp-fav-etat{display:flex;gap:10px;margin-top:6px;padding-top:4px;border-top:1px solid var(--fx-ligne);font-size:11.5px;opacity:.75}',
+      '.sbp-fav-etat-sel{color:var(--fx-acc);font-weight:bold;opacity:1}',
+
+      '.sbp-fav-zone [data-sbp-fav-item]{position:relative}',
+      '.sbp-fav-case{position:absolute;left:2px;top:50%;transform:translateY(-50%);z-index:7;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border:1.5px solid currentColor;border-radius:4px;background:var(--container-color,rgba(30,30,34,.9));opacity:0;cursor:pointer;font-size:12px;line-height:1}',
+      '.sbp-fav-carte .sbp-fav-case{top:6px;left:6px;transform:none;background:rgba(0,0,0,.55);color:#fff;border-color:#fff}',
+      '.sbp-fav-det .sbp-fav-case{position:static;transform:none}',
+      '.sbp-fav-zone [data-sbp-fav-item]:hover .sbp-fav-case,.sbp-fav-zone[data-selection] .sbp-fav-case,.sbp-fav-zone [data-choisi] .sbp-fav-case{opacity:1}',
+      '.sbp-fav-zone [data-choisi] .sbp-fav-case{background:var(--fx-acc);border-color:var(--fx-acc);color:#fff}',
+      '.sbp-fav-zone [data-choisi] .sbp-fav-case::after{content:"✓"}',
+      '@media (hover:none){.sbp-fav-case{width:22px;height:22px}.sbp-fav-zone:not([data-selection]) .sbp-fav-case{opacity:0;pointer-events:none}}',
+      '.sbp-fav-zone [data-choisi]{background:color-mix(in srgb,var(--fx-acc) 16%,transparent);outline:1px solid color-mix(in srgb,var(--fx-acc) 60%,transparent);outline-offset:-1px;border-radius:6px}',
+
+      '.sbp-fav-zone .topic:hover .titre:not(#sbp-z){color:var(--topic-title-color)!important}',
+      '.sbp-fav-zone .topic:hover .topic-link:visited .titre:not(#sbp-z){color:gray!important}',
+      '.sbp-fav-carte .sbp-fav-badge{left:auto;right:6px;top:auto;bottom:6px}',
+      '.sbp-fav-carte .sbp-fav-actions{position:absolute;right:4px;top:4px;z-index:6}',
+      '.sbp-fav-ligne{padding-left:26px!important}',
+      '.sbp-fav-ligne .sbp-fav-actions{margin-left:auto}',
+
+      '.sbp-fav-det-entete,.sbp-fav-det{display:grid;grid-template-columns:24px minmax(0,1fr) 44px 52px 30px;align-items:center;gap:4px}',
+      '.sbp-fav-det-entete{position:sticky;top:0;z-index:8;background:var(--container-color,inherit);border-bottom:1px solid var(--fx-ligne);font-size:11.5px}',
+      '.sbp-fav-det-col{border:none;background:none;color:inherit;font:inherit;font-weight:600;text-align:left;padding:4px 2px;cursor:pointer;opacity:.75;white-space:nowrap}',
+      '.sbp-fav-det-col:hover,.sbp-fav-det-col.sbp-actif{opacity:1}',
+      '.sbp-fav-det-col.sbp-fav-det-nb,.sbp-fav-det-col.sbp-fav-det-der{text-align:right}',
+      '.sbp-fav-det-entete::after{content:"";grid-column:5}',
+      '.sbp-fav-det{min-height:30px;padding:2px 0;color:inherit;text-decoration:none;border-radius:6px}',
+      '.sbp-fav-det:hover{background:rgba(127,127,127,.12)}',
+      '.sbp-fav-det-case{display:flex;justify-content:center}',
+      '.sbp-fav-det-nom{display:flex;align-items:center;gap:5px;min-width:0}',
+      '.sbp-fav-det-ico{width:16px;height:auto;flex:none;image-rendering:pixelated}',
+      '.sbp-fav-det-titre{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--topic-title-color,inherit);font-weight:600}',
+      '.sbp-fav-det-nb,.sbp-fav-det-der{text-align:right;font-size:12px;opacity:.8;white-space:nowrap}',
+      '.sbp-fav-det .sbp-fav-actions{position:static;opacity:1}',
+      '.sbp-fav-det .sbp-fav-plus{min-width:26px;height:24px}',
+
+      '.sbp-fav-menu-titre{padding:4px 10px 2px;font-size:11px;font-weight:bold;opacity:.6}',
+      '.sbp-fav-menu-rapide{display:flex;gap:4px;padding:4px 6px 6px;border-bottom:1px solid rgba(127,127,127,.25);margin-bottom:3px}',
+      '.sbp-fav-menu-rapide-btn{flex:1 1 0;min-width:34px;height:32px;border:none;border-radius:6px;background:rgba(127,127,127,.12);color:inherit;cursor:pointer;font-size:15px}',
+      '.sbp-fav-menu-rapide-btn:hover{background:rgba(127,127,127,.28)}',
+      '.sbp-fav-menu-rapide-btn.sbp-danger{color:#e06c6c}',
+
+      '.sbp-fav-fond{position:fixed;inset:0;z-index:2147482000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45)}',
+      '.sbp-fav-fenetre{display:flex;flex-direction:column;width:min(980px,96vw);height:min(760px,88vh);border-radius:10px;overflow:hidden;background:var(--container-color,#26292e);color:var(--text-color,#ddd);border:1px solid rgba(127,127,127,.35)}',
+      '.sbp-fav-fenetre-tete{display:flex;align-items:center;gap:8px;padding:6px 8px 6px 14px;border-bottom:1px solid rgba(127,127,127,.25)}',
+      '.sbp-fav-fenetre-titre{flex:1;font-weight:bold}',
+      '.sbp-fav-fenetre>.sbp-fav-zone{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:200px minmax(0,1fr);padding:0}',
+      '.sbp-fav-volet{overflow:auto;padding:8px 6px;border-right:1px solid rgba(127,127,127,.25);display:flex;flex-direction:column;gap:1px}',
+      '.sbp-fav-volet-ligne{display:flex;align-items:center;gap:6px;border:none;background:none;color:inherit;cursor:pointer;padding:5px 8px;border-radius:6px;font:inherit;font-size:13px;text-align:left}',
+      '.sbp-fav-volet-ligne:hover,.sbp-fav-volet-ligne.sbp-cible{background:rgba(127,127,127,.18)}',
+      '.sbp-fav-volet-ligne.sbp-cible{outline:2px dashed var(--fx-acc)}',
+      '.sbp-fav-volet-ligne.sbp-actif{background:color-mix(in srgb,var(--fx-acc) 25%,transparent);font-weight:bold}',
+      '.sbp-fav-volet-nom{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+      '.sbp-fav-volet-nb{font-size:11px;opacity:.6}',
+      '.sbp-fav-volet-plus{opacity:.7;margin-top:6px}',
+      '.sbp-fav-principal{display:flex;flex-direction:column;min-width:0;min-height:0;padding:8px 12px 8px}',
+      '.sbp-fav-principal>.sbp-fav-corps{flex:1 1 auto;min-height:0;max-height:none!important;overflow:auto}',
+      '@media (max-width:640px){.sbp-fav-fond{align-items:stretch}.sbp-fav-fenetre{width:100vw;height:100%;border-radius:0}.sbp-fav-fenetre>.sbp-fav-zone{grid-template-columns:minmax(0,1fr)}.sbp-fav-volet{display:none}}',
+      '.sbp-fav-rangee .sbp-fav-dossier{margin-left:6px;font-weight:normal;vertical-align:middle}',
+      '.sbp-fav-cherche{width:100%;box-sizing:border-box;margin:0 0 6px;padding:4px 8px;border-radius:6px;border:1px solid rgba(127,127,127,.4);background:transparent;color:inherit;font:inherit;font-size:12.5px}',
+      '.sbp-fav-corps[data-vue=grille]{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}',
+      '.sbp-fav-groupe{grid-column:1/-1;display:flex;align-items:center;gap:8px;padding:6px 2px 3px;font-size:11px;font-weight:bold;opacity:.7}',
+      '.sbp-fav-groupe-trait{flex:1;height:0;border-top:1px solid rgba(127,127,127,.35)}',
+      '.sbp-fav-ligne{display:flex;align-items:center;gap:6px;min-width:0;padding:5px 6px 5px 8px;border-radius:6px;color:inherit;text-decoration:none;font-size:13.5px;line-height:1.3;border-left:3px solid transparent}',
+      '.sbp-fav-ligne:focus-visible{background:rgba(127,127,127,.15)}',
+      '.sbp-fav-ligne[data-rose]{border-left-color:#e86aa6}',
+      '.sbp-fav-ligne .sbp-fav-titre{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+      '.sbp-fav-ligne[data-nouveau] .sbp-fav-titre{font-weight:bold}',
+      '.sbp-fav-icone{flex:none;opacity:.7}',
+      '.sbp-fav-dossier{flex:none;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10.5px;opacity:.55;border:1px solid rgba(127,127,127,.35);border-radius:8px;padding:0 6px}',
+      '.sbp-fav-badge{flex:none;border-radius:9px;padding:1px 7px;font-size:11px;font-weight:bold;background:#E0A84F;color:#1d1f21}',
+      '.sbp-fav-actions{flex:none;display:inline-flex;gap:2px;opacity:0;transition:opacity .12s}',
+      '.sbp-fav-ligne:hover .sbp-fav-actions,.sbp-fav-carte:hover .sbp-fav-actions,.sbp-fav-ligne:focus-within .sbp-fav-actions,.sbp-fav-carte:focus-within .sbp-fav-actions{opacity:1}',
+      '@media (hover:none){.sbp-fav-actions{opacity:.8}}',
+      '.sbp-fav-act{border:none;background:none;color:inherit;cursor:pointer;font-size:12px;line-height:1;padding:3px 5px;border-radius:5px;opacity:.75}',
+      '.sbp-fav-act:hover{opacity:1;background:rgba(127,127,127,.25)}',
+      '.sbp-fav-act-retirer[data-arme]{opacity:1;background:#c0392b;color:#fff;font-weight:bold}',
+      '[data-retrait]{opacity:.45;pointer-events:none}',
+      '.sbp-glisse{opacity:.5}',
+      '.sbp-fav-carte{position:relative;display:flex;flex-direction:column;min-width:0;border-radius:8px;overflow:hidden;color:inherit;text-decoration:none;background:rgba(127,127,127,.12)}',
+      '.sbp-fav-carte:focus-visible{background:rgba(127,127,127,.22)}',
+      '.sbp-fav-image{position:relative;display:block;aspect-ratio:1/1;overflow:hidden;background:rgba(127,127,127,.15)}',
+      '.sbp-fav-image::after{content:"★";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:22px;opacity:.35;pointer-events:none}',
+      '.sbp-fav-carte[data-sbp-fav-img=oui] .sbp-fav-image::after{content:none}',
+      '.sbp-fav-image img{display:block;width:100%;height:100%;object-fit:cover}',
+      '.sbp-fav-carte[data-rose] .sbp-fav-image img{filter:blur(10px);transform:scale(1.1);transition:filter .2s}',
+      '.sbp-fav-carte[data-rose]:hover .sbp-fav-image img{filter:none}',
+      '.sbp-fav-carte .sbp-fav-badge{position:absolute;left:4px;top:4px;z-index:1}',
+      '.sbp-fav-carte .sbp-fav-actions{position:absolute;right:3px;top:3px;z-index:1;background:rgba(0,0,0,.55);border-radius:6px;color:#fff}',
+      '.sbp-fav-carte .sbp-fav-titre{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin:5px 6px 6px;max-height:2.5em;font-size:12px;line-height:1.25;word-break:break-word}',
+      '.sbp-fav-carte[data-nouveau] .sbp-fav-titre{font-weight:bold}',
+      '.sbp-fav-vide{grid-column:1/-1;font-size:13px;opacity:.7;padding:4px 2px}',
+      '.sbp-fav-menu{position:fixed;z-index:2147483000;min-width:170px;max-width:260px;padding:4px;border-radius:8px;background:var(--dropdown-menu-bg,#25282c);color:var(--text-color,#C5C8C6);border:1px solid var(--dropdown-menu-border,#373B41);font-size:13px}',
+      '.sbp-fav-menu-item{display:block;width:100%;text-align:left;border:none;background:none;color:inherit;padding:6px 10px;border-radius:5px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+      '.sbp-fav-menu-item:hover{background:rgba(127,127,127,.2)}',
+      '.sbp-fav-menu-item.sbp-actif{font-weight:bold}',
+      '.sbp-fav-menu-item.sbp-danger{color:#e06c6c}',
+      '.sbp-fav-menu-sep{height:1px;margin:3px 6px;background:rgba(127,127,127,.3)}',
+      '.sbp-fav-saisie{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.35)}',
+      '.sbp-fav-saisie-boite{display:flex;flex-direction:column;gap:10px;width:min(320px,90vw);padding:14px;border-radius:10px;background:var(--dropdown-menu-bg,#25282c);color:var(--text-color,#C5C8C6);border:1px solid var(--dropdown-menu-border,#373B41)}',
+      '.sbp-fav-saisie-titre{font-weight:bold}',
+      '.sbp-fav-saisie-boite input{padding:6px 8px;border-radius:6px;border:1px solid rgba(127,127,127,.45);background:rgba(127,127,127,.12);color:inherit;font-size:14px}',
+      '.sbp-fav-saisie-bas{display:flex;justify-content:flex-end;gap:8px}',
+    ].join('\n');
+    (document.head || document.documentElement).appendChild(st);
+  })();
+
+  (function surveillerFavoris() {
+    let prevu = false;
+    const passe = function () { prevu = false; majFavoris(); };
+    new MutationObserver(function (ms) {
+      if (prevu) return;
+      for (let i = 0; i < ms.length; i++) {
+        const t = ms[i].target;
+        const e = t.nodeType === 1 ? t : t.parentElement;
+        if (e && e.closest && e.closest('[data-sbp-fav]')) continue;
+        prevu = true;
+        requestAnimationFrame(passe);
+        return;
+      }
+    }).observe(document.documentElement, { childList: true, subtree: true });
+    majFavoris();
+
+    setInterval(function () {
+      if (document.hidden || !reglages.favoris) return;
+      let vue = false;
+      favZones.forEach(function (z) { if (z.isConnected) vue = true; });
+      if (vue) relireEtRedessiner(true);
+    }, 180000);
+  })();
+
   installer();
 
   document.addEventListener('eco-reglages-shitbox', function (e) {
@@ -38529,7 +41336,8 @@
 })();
   } });
 
-  ECO_MODULES.push({ id: "uploads", nom: "Uploads+", version: "1.142", desc: "Envoi sur Noelshack et autres hébergeurs, éditeur GIF.", debut: "idle", page: false, reglages: true, code: function (GM_getValue, GM_setValue, GM_info) {
+  ECO_MODULES.push({ id: "uploads", nom: "Uploads+", version: "1.150", desc: "Envoi sur Noelshack et autres hébergeurs, éditeur GIF.", debut: "idle", page: false, reglages: true, code: function (GM_getValue, GM_setValue, GM_info) {
+    const { setTimeout, setInterval, requestAnimationFrame, requestIdleCallback, MutationObserver, IntersectionObserver, ResizeObserver } = (typeof ecoMesures === 'function' ? ecoMesures : (window.__ecoMesures || function () { return window; }))("uploads");
 (function () {
   'use strict';
 
@@ -38692,6 +41500,7 @@
     try { const m = JSON.parse(localStorage.getItem(CLE_PAGE) || '{}'); m[nomHote] = { ok: ok, t: Date.now() }; localStorage.setItem(CLE_PAGE, JSON.stringify(m)); } catch (e) {  }
   }
 
+  const SANS_PAGE = { Catbox: true };
   function posterFormulaire(nomHote, url, fd, entetes, lire, suivi) {
     let requete = null;
     let xhrPage = null;
@@ -38714,6 +41523,7 @@
         }
       }
 
+      if (nomHote === 'Noelshack') { try { ezgifNoter('NOELSHACK réponse ' + r.status + ' « ' + String(r.responseText || '').replace(/\s+/g, ' ').slice(0, 300) + ' »'); } catch (e) {  } }
       journal('réponse ' + r.status + ' « ' + String(r.responseText || '').replace(/\s+/g, ' ').slice(0, 200) + ' »' + (lien ? '' : ' (pas de lien)'));
       if (r.status >= 200 && r.status < 300 && lien) { resolve(lien); return; }
 
@@ -38791,7 +41601,9 @@
       });
      }
      function lancer(essai) {
-      if (etatPage(nomHote) !== false && typeof XMLHttpRequest === 'function') lancerPage(essai);
+
+      if (SANS_PAGE[nomHote]) lancerGM(essai);
+      else if (etatPage(nomHote) !== false && typeof XMLHttpRequest === 'function') lancerPage(essai);
       else lancerGM(essai);
      }
      lancer(1);
@@ -38822,6 +41634,42 @@
       });
     });
   }
+
+  function longueurParPlage(lien) {
+    return new Promise(function (ok) {
+      let fini = false;
+      let req = null;
+      const finir = function (v) { if (fini) return; fini = true; try { if (req && req.abort) req.abort(); } catch (e) {  } ok(v); };
+      const lire = function (r) {
+        const h = (r && r.responseHeaders) || '';
+        if (!h || !r.status) return false;
+        const cr = /content-range:\s*bytes\s+[\d*-]+\/(\d+)/i.exec(h);
+        const cl = /content-length:\s*(\d+)/i.exec(h);
+        finir(r.status === 416 ? 0 : r.status === 206 && cr ? +cr[1] : (r.status >= 200 && r.status < 300 && cl ? +cl[1] : null));
+        return true;
+      };
+      try {
+        req = GM_xmlhttpRequest({
+          method: 'GET', url: lien, timeout: 15000, headers: { Range: 'bytes=0-0' },
+          onreadystatechange: function (r) { if (r && r.readyState >= 2) lire(r); },
+          onload: function (r) { if (!lire(r)) finir(null); },
+          onerror: function () { finir(null); },
+          ontimeout: function () { finir(null); },
+        });
+      } catch (e) { finir(null); }
+      setTimeout(function () { finir(null); }, 16000);
+    });
+  }
+
+  function enTetesSurs(lien) {
+    return enTetes(lien).then(function (r) {
+      if (!(r.status >= 200 && r.status < 300 && r.longueur === 0)) return r;
+      return longueurParPlage(lien).then(function (n) {
+        try { console.info('[Uploads+] HEAD dit 0 o, contre-vérification par plage -> ' + (n == null ? 'inconnu' : n + ' o') + ' (' + lien + ')'); } catch (e) {  }
+        return n == null || n > 0 ? Object.assign({}, r, { longueur: n, poids: n || 0 }) : r;
+      });
+    });
+  }
   function verifierLienApres(envoi, nomHote, suivi, attendu) {
     let stop = false;
     return {
@@ -38834,7 +41682,7 @@
             if (stop) { ko(new Error('Envoi annulé.')); return; }
             n++;
             if (suivi && suivi.etat) suivi.etat('Vérification du fichier sur ' + nomHote + '…' + (n > 1 ? ' (pas encore en ligne, essai ' + n + ')' : ''), null);
-            enTetes(lien).then(function (r) {
+            enTetesSurs(lien).then(function (r) {
               if (stop) return;
               let defaut = '';
               if (r.status === 404 || r.status === 410) defaut = 'introuvable (erreur ' + r.status + ')';
@@ -38902,6 +41750,72 @@
     });
   }
 
+  function envoyerNoelshackVerifie(f, suivi) {
+    let en = envoyerNoelshack(f, suivi);
+    let annule = false;
+    const voulu = f && typeof f !== 'string' ? (extImage(f.name) || extDeType(f.type)) : '';
+    const promesse = en.promesse.then(function (lien) {
+      const rendu = extImage(lien);
+      if (!/^(png|jpg)$/.test(voulu) || !rendu || rendu === voulu || annule) return lien;
+      ezgifNoter('NOELSHACK a rendu un .' + rendu + ' pour un .' + voulu + ' (image déjà connue de Noelshack) -> 2e envoi avec 1 px transparent en plus');
+      if (suivi && suivi.etat) suivi.etat('Noelshack a reconnu l\'image (rendue en .' + rendu + ') : 1 px transparent ajouté par ezgif, nouvel envoi…', null);
+      return imageAvecMarge(f).then(function (g) {
+        if (annule) throw new Error('Envoi annulé.');
+        en = envoyerNoelshack(g, suivi);
+        return en.promesse;
+      }).then(function (l2) {
+        const r2 = extImage(l2);
+        ezgifNoter('NOELSHACK 2e envoi -> ' + l2);
+        if (r2 && r2 !== voulu) throw refus('Noelshack reconnaît cette image et rend un fichier qu\'il a déjà (.' + r2 + ') à la place de ton ' + voulu.toUpperCase() + '. Envoie-la sur un autre hébergeur.');
+        if (suivi && suivi.note) suivi.note('Noelshack reconnaissait l\'image : envoyée avec 1 px transparent en plus (fait par ezgif)');
+        return l2;
+      });
+    });
+    return { promesse: promesse, annuler: function () { annule = true; if (en) en.annuler(); } };
+  }
+
+  function imageAvecMarge(f) {
+    const ext = extImage(f.name) || extDeType(f.type) || 'png';
+
+    const taille = f.slice(0, 32).arrayBuffer().then(function (b) {
+      const o = new Uint8Array(b);
+      if (o[0] === 0x89 && o[1] === 0x50 && o[12] === 0x49 && o[13] === 0x48) {
+        const be = function (i) { return ((o[i] << 24) >>> 0) + (o[i + 1] << 16) + (o[i + 2] << 8) + o[i + 3]; };
+        return { l: be(16), h: be(20) };
+      }
+      return dimensionsDe(f);
+    });
+    return taille.then(function (d) {
+      return ezgifEnvoyerImage('resize', f, f.name || ('image.' + ext)).then(function (fichier) {
+        return ezgifPageOutil('resize', fichier).then(function (doc) {
+          const form = ezgifFormulaire(doc, 'resize');
+          if (!form || !/\/resize\//.test(form.getAttribute('action') || '')) throw new Error('ezgif : outil resize introuvable');
+          const entree = [fichier];
+          const h0 = form.querySelector('input[name="file"]');
+          if (h0 && h0.value) entree.push(h0.value);
+          const texte = function (x) { return ((x.value || '') + ' ' + (x.textContent || '')).toLowerCase(); };
+          const canvas = Array.from(form.querySelectorAll('[name="method"] option, input[name="method"]')).find(function (x) { return /canvas/.test(texte(x)); });
+          if (!canvas) throw new Error('ezgif : méthode « canvas » du resize introuvable');
+          const champs = { width: d.l + 1, height: d.h, method: canvas.value };
+          Array.from(form.querySelectorAll('input')).filter(function (x) { return x.name && /percent/i.test(x.name); }).forEach(function (x) { champs[x.name] = null; });
+          if (form.querySelector('[name="canvas-transparent"]')) champs['canvas-transparent'] = 'on';
+          ezgifNoter('↳ resize (marge) : ' + (d.l + 1) + '×' + d.h + ', method=' + canvas.value);
+          return ezgifSoumettre('resize', form, champs, entree, ext === 'jpg' ? 'jpe?g' : ext);
+        });
+      });
+    }).then(function (s) {
+      return ezgifRequete({ url: s.lien, binaire: true }).then(function (r) {
+        const o = new Uint8Array(r.response);
+        if (!o.length) throw new Error('ezgif a rendu une image vide.');
+        const g = new File([o], f.name || ('image.' + ext), { type: f.type || IMAGE_FORMATS[ext] || 'image/png' });
+        Object.keys(f).forEach(function (k) { if (/^_up/.test(k)) g[k] = f[k]; });
+        return g;
+      });
+    }, function (e) {
+      throw refus('Noelshack reconnaît cette image et rend un autre fichier ; le 2e essai chez ezgif a échoué (' + ((e && e.message) || e) + '). Envoie-la sur un autre hébergeur.');
+    });
+  }
+
   function lireReponseNoelshack(texte) {
     let j = null;
     try { j = JSON.parse(texte); } catch (e) { j = null; }
@@ -38941,6 +41855,13 @@
       if (g !== f && suivi && suivi.etat) suivi.etat('Envoi à Noelshack…', null);
       const fd = new FormData();
       fd.append('fichier[]', g, g.name || 'image.png');
+
+      g.slice(0, 4096).arrayBuffer().then(function (b) {
+        const o = new Uint8Array(b);
+        const t = String.fromCharCode.apply(null, Array.from(o));
+        const sig = o[0] === 0x89 && t.slice(1, 4) === 'PNG' ? 'PNG' + (t.indexOf('acTL') !== -1 ? ' animé (APNG)' : '') : t.slice(0, 3) === 'GIF' ? 'GIF' : o[0] === 0xFF && o[1] === 0xD8 ? 'JPG' : '?';
+        ezgifNoter('NOELSHACK envoi de « ' + (g.name || '') + ' » (' + (g.type || '?') + ', ' + g.size + ' o, contenu : ' + sig + ')');
+      }).catch(function () {});
       return lancer(posterFormulaire('Noelshack', API_NOELSHACK_JSON, fd, null, lireReponseNoelshack, suivi)).catch(function (e) {
         if (annule || !e || !e.illisible) throw e;
 
@@ -38968,7 +41889,7 @@
       couleur: '#E05A4F',
       images: true,
       preparer: function (f, etape, opts) { return preparerPourNoelshack(f, etape, !!(opts && opts.agrandir)); },
-      envoyer: function (f, suivi) { return envoyerNoelshack(f, suivi); },
+      envoyer: function (f, suivi) { return envoyerNoelshackVerifie(f, suivi); },
     },
 
     site: {
@@ -39538,7 +42459,10 @@
       const envoi = posterFormulaire('Imgur', 'https://api.imgur.com/3/upload', fd, { Authorization: 'Client-ID eb3fa83064638bb' }, function (t) {
         const j = JSON.parse(t);
         const l = j && j.success && j.data && (j.data.mp4 || j.data.link);
-        return l ? String(l).replace(/^http:/, 'https:') : null;
+        if (!l) return null;
+        const u = String(l).replace(/^http:/, 'https:');
+
+        return video ? u.replace(/^https:\/\/i\.imgur\.com\/(\w+)\.(mp4|webm|mov|m4v)$/i, 'https://imgur.com/$1.$2') : u;
       }, suivi);
       if (!video) return envoi;
 
@@ -39736,8 +42660,10 @@
         p += 9;
         if (fl & 0x80) p += 3 * (1 << ((fl & 7) + 1));
         p++;
+        const debutDonnees = p;
         sauterSousBlocs();
-        if (p > o.length) break;
+
+        if (p > o.length && !(debutDonnees < o.length && o[debutDonnees] > 0)) break;
         images++;
         duree += delai * 10;
         delais.push(delai <= 1 ? 100 : delai * 10);
@@ -39785,7 +42711,7 @@
     });
   }
 
-  const HOTES_MEDIAS = '(?:files\\.catbox\\.moe|litter\\.catbox\\.moe|i\\.imgur\\.com|0x0\\.st)';
+  const HOTES_MEDIAS = '(?:files\\.catbox\\.moe|litter\\.catbox\\.moe|(?:i\\.)?imgur\\.com|0x0\\.st)';
   const RE_TIERS = new RegExp('^https?:\\/\\/' + HOTES_MEDIAS + '\\/[^\\s?#"\'<>]+\\.(?:png|jpe?g|gif|webp|bmp|avif)(?:[?#][^\\s"\'<>]*)?$', 'i');
   const RE_TIERS_VIDEO = new RegExp('^https?:\\/\\/' + HOTES_MEDIAS + '\\/[^\\s?#"\'<>]+\\.(?:mp4|webm|mov|m4v)(?:[?#][^\\s"\'<>]*)?$', 'i');
   const ATTR_TIERS = 'data-up-tiers';
@@ -39884,7 +42810,9 @@
       }, Promise.resolve(null)).then(function (res) { return res || { src: null, journal: journal }; });
     });
   }
+  function imgurDirect(u) { return String(u || '').replace(/^https?:\/\/(?:www\.)?imgur\.com\/(\w{5,})\.(mp4|webm)(?=[?#]|$)/i, 'https://i.imgur.com/$1.$2'); }
   function trouverVideo(url) {
+    url = imgurDirect(url);
     const journal = [];
     let pasPrete = false;
     return testerVideo(url, 10000).then(function (ok) {
@@ -40221,12 +43149,13 @@
       afficherTiers(el, url);
     });
 
-    ecoDans(racines, 'a[href*="catbox.moe"], a[href*="i.imgur.com"], a[href*="0x0.st"]').forEach(function (a) {
+    ecoDans(racines, 'a[href*="catbox.moe"], a[href*="imgur.com"], a[href*="0x0.st"]').forEach(function (a) {
 
       if (a.hasAttribute(ATTR_TIERS) || a.querySelector('img, video') || a.closest('header, nav, textarea, [data-up-file], [data-pf-billets], [data-pf-act]')) return;
       const url = a.getAttribute('href') || '';
       const video = RE_TIERS_VIDEO.test(url);
       if (!video && !RE_TIERS.test(url)) return;
+      if (!video && /^https?:\/\/(?:www\.)?imgur\.com\//i.test(url)) return;
       const texte = (a.textContent || '').trim();
       if (texte && texte !== url && texte.replace(/^https?:\/\//, '') !== url.replace(/^https?:\/\//, '')) return;
       a.setAttribute(ATTR_TIERS, url);
@@ -40689,6 +43618,15 @@
   function ezgifNoter(t) {
     EZGIF_RAPPORT.push(new Date().toTimeString().slice(0, 8) + ' ' + t);
     if (EZGIF_RAPPORT.length > 40) EZGIF_RAPPORT.shift();
+
+    if (/^(DÉPART|ENVOI|ÉCHEC|ENVOYÉ|NOELSHACK)/.test(t)) {
+      try {
+        const k = 'nanachan-uploads-plus-diag';
+        const l = JSON.parse(sessionStorage.getItem(k) || '[]');
+        l.push(new Date().toTimeString().slice(0, 8) + ' ' + String(t).slice(0, 400));
+        sessionStorage.setItem(k, JSON.stringify(l.slice(-20)));
+      } catch (e) {  }
+    }
   }
   function ezgifResume(doc, r) {
     const out = doc.querySelector('#output');
@@ -42144,6 +45082,24 @@
     const direct = liens.filter(function (u) { return /\/tmp\//.test(u) && decodeURIComponent(u.split(/[?#]/)[0].split('/').pop()) === fichier; })[0];
     return { fichier: fichier, lien: ezgifAbsolu(direct || save || EZGIF + '/save/' + fichier) };
   }
+
+  function ezgifDerniereSortie(doc, exts, exclu) {
+    if (!doc || !doc.querySelectorAll) return null;
+    const exclus = [].concat(exclu || []);
+    const re = new RegExp('(ezgif-[\\w-]+\\.(?:' + exts + '))(?:\\.html)?$', 'i');
+    const racine = doc.querySelector('#output') || doc;
+    const noms = [];
+    Array.from(racine.querySelectorAll('a[href], img[src]')).forEach(function (e) {
+      const u = e.getAttribute('href') || e.getAttribute('src') || '';
+      const m = re.exec(decodeURIComponent(String(u).split(/[?#]/)[0].split('/').pop()));
+      if (m && exclus.indexOf(m[1]) === -1 && noms.indexOf(m[1]) === -1) noms.push(m[1]);
+    });
+    if (!noms.length) return null;
+    const nom = noms[noms.length - 1];
+    const direct = Array.from(racine.querySelectorAll('img[src], a[href]')).map(function (e) { return e.getAttribute('src') || e.getAttribute('href') || ''; })
+      .filter(function (u) { return /\/tmp\//.test(u) && decodeURIComponent(u.split(/[?#]/)[0].split('/').pop()) === nom; })[0];
+    return { fichier: nom, lien: ezgifAbsolu(direct || EZGIF + '/save/' + nom), doc: doc };
+  }
   function ezgifLienSortie(doc, exts, exclu) { const s = ezgifSortie(doc, exts, exclu); return s ? s.lien : ''; }
   function ezgifNom(lien) { return decodeURIComponent(String(lien || '').split('?')[0].split('/').pop()); }
   const VIDEO_EXTS = 'mp4|webm|mov|mkv|avi|m4v';
@@ -43025,8 +45981,16 @@
       journal('image chez ezgif : ' + fichier + ' (' + W + '×' + H + ')');
       let ch = Promise.resolve();
 
-      const im0 = opts.images;
-      if (opts.gifAnime && format !== 'gif' && extDeType(f.type) === 'gif' && im0 && im0.n > 1) ch = ch.then(function () {
+      let im0 = opts.images;
+
+      if (format !== 'gif' && extDeType(f.type) === 'gif' && !(im0 && im0.n > 1)) ch = ch.then(function () {
+        return f.arrayBuffer().then(function (buf) {
+          const i = infosGif(new Uint8Array(buf));
+          if (i && i.images > 1) { im0 = { de: im0 && im0.de > 0 ? Math.min(im0.de, i.images - 1) : 0, a: 0, n: i.images }; journal('GIF de ' + i.images + ' images → image ' + (im0.de + 1)); }
+        }, function () {  });
+      });
+      ch = ch.then(function () {
+        if (!(format !== 'gif' && extDeType(f.type) === 'gif' && im0 && im0.n > 1)) return null;
         dire('ezgif : image ' + (im0.de + 1) + ' du GIF…');
         return ezgifCouperGif(fichier, im0.de, im0.de, im0.n).then(function (o) {
           fichier = o.fichier; lien = o.lien; doc = o.doc;
@@ -43179,7 +46143,8 @@
       });
 
       ch = ch.then(function () {
-        const e0 = extImage(fichier);
+
+        const e0 = extImage(fichier) || (lien ? '' : extDeType(f.type));
         if (!e0 || e0 === format) return null;
 
         if (e0 === 'gif' && /^(png|jpg)$/.test(format)) {
@@ -43271,6 +46236,7 @@
       }
       const nomFin = opts.nom || renommer(f.name || 'image', format);
 
+      if (!lien && format !== (extDeType(f.type) || format)) throw new Error('ezgif : la conversion en ' + format.toUpperCase() + ' n\'a pas été faite (réessaie).');
       if (!lien) {
         finChrono();
         const g = (f.name || '') === nomFin ? f : new File([f], nomFin, { type: f.type });
@@ -43303,10 +46269,24 @@
     });
     return sess.obtenir(t, t + 1, false).then(function (r) {
       arret();
-      const s0 = Math.round(Math.max(0, t - decalageEz(r.fichierEz)) * 1000) / 1000;
+      const dec = decalageEz(r.fichierEz);
+      let s0 = Math.round(Math.max(0, t - dec) * 1000) / 1000;
+      let s1 = Math.round((s0 + 0.3) * 1000) / 1000;
+
+      const tot = +o.total || 0;
+      const finVideo = tot > 0 && t > tot - 0.35;
+      if (finVideo) {
+        s1 = Math.round(Math.max(0.05, tot - dec) * 1000) / 1000;
+        s0 = Math.round(Math.max(0, s1 - 0.4) * 1000) / 1000;
+      }
       const essai = function (outil, exts) {
         etape('ezgif 2/2 : image à ' + horodatage(t) + '…', null);
-        return ezgifOutil(outil, r.fichierEz, { start: s0, end: Math.round((s0 + 0.3) * 1000) / 1000, size: 'original' }, exts);
+        return ezgifOutil(outil, r.fichierEz, { start: s0, end: s1, size: 'original' }, exts).then(function (res) {
+          if (!finVideo) return res;
+          const der = ezgifDerniereSortie(res.doc, exts, [r.fichierEz]);
+          if (der && der.fichier !== res.fichier) ezgifNoter('↳ fin de la vidéo : dernière image rendue prise (' + der.fichier + ')');
+          return der || res;
+        });
       };
       return essai('video-to-png', 'png').then(null, function (e) {
         ezgifNoter('↳ video-to-png : ' + ((e && e.message) || e) + ' → essai video-to-jpg');
@@ -43744,7 +46724,7 @@
           if (!modeImage && (c[1] === 'png' || c[1] === 'jpg')) { formatImgVid = c[1]; reglages.formatImageVideo = c[1]; enregistrerReglages(); choisirImageVid(true); return; }
           if (!modeImage && imageVid) choisirImageVid(false);
 
-          if (modeImage ? (c[1] !== 'gif' && animeImg && !gifAnime()) : (c[1] !== 'gif' && !tiersWebm.length)) { if (!modeImage) { peindreFormat(); rafraichir(); } return; }
+          if (modeImage ? (c[1] !== 'gif' && animeImg && extOrig !== 'gif') : (c[1] !== 'gif' && !tiersWebm.length)) { if (!modeImage) { peindreFormat(); rafraichir(); } return; }
           if (modeImage && gifAnime() && c[1] !== 'gif') poigneeImg = 'debut';
           formatSortie = c[1];
           if (!modeImage) reglages.editeurFormat = formatSortie;
@@ -44243,21 +47223,21 @@
         return [x[0], bt];
       });
 
-      let echelleIdx = 20;
-      if (rep && modeImage && rep.echelle > 0 && rep.echelle <= 1) echelleIdx = Math.max(2, Math.min(20, Math.round(rep.echelle * 20)));
-      function echelleImage() { return Math.max(0.1, Math.min(1, echelleIdx / 20)); }
+      let echelleIdx = 100;
+      if (rep && modeImage && rep.echelle > 0 && rep.echelle <= 1) echelleIdx = Math.max(10, Math.min(100, Math.round(rep.echelle * 100)));
+      function echelleImage() { return Math.max(0.1, Math.min(1, echelleIdx / 100)); }
       function texteEchelle(i) {
         let d = '';
-        try { const sr = sortieRetouchee(); if (sr.l && sr.h) d = ' · ' + Math.max(1, Math.round(sr.l * i / 20)) + '×' + Math.max(1, Math.round(sr.h * i / 20)); } catch (e) { d = ''; }
-        return (i * 5) + ' %' + d;
+        try { const sr = sortieRetouchee(); if (sr.l && sr.h) d = ' · ' + Math.max(1, Math.round(sr.l * i / 100)) + '×' + Math.max(1, Math.round(sr.h * i / 100)); } catch (e) { d = ''; }
+        return i + ' %' + d;
       }
-      const cEchelle = curseur('Taille', 2, 20, echelleIdx, 20, texteEchelle,
+      const cEchelle = curseur('Taille', 10, 100, echelleIdx, 100, texteEchelle,
         function (i) { echelleIdx = i; if (total) rafraichir(); });
       cEchelle.input.title = 'Taille de l\'image envoyée (redimensionnée par ezgif) · double-clic : 100 %';
 
       function majTexteEchelle() {
         const v = cEchelle.input.parentNode.children[2];
-        if (v) v.textContent = texteEchelle(echelleIdx) + (echelleIdx === 20 ? ' (défaut)' : '');
+        if (v) v.textContent = texteEchelle(echelleIdx) + (echelleIdx === 100 ? ' (défaut)' : '');
       }
       let qualiteJpg = Math.max(40, Math.min(100, Math.round((reglages.imageQualite || 100) / 5) * 5));
       if (rep && rep.format === 'jpg' && rep.qualite >= 40 && rep.qualite <= 100) qualiteJpg = Math.round(rep.qualite / 5) * 5;
@@ -46207,7 +49187,7 @@
           if (!lossyAuto && LOSSY[lossyIdx]) t.push('compression ' + LOSSY[lossyIdx]);
           if (lossyAuto && prioAuto === 'res') t.push('priorité Net');
         }
-        if (modeImage && echelleIdx < 20) t.push('taille ' + echelleIdx * 5 + ' %');
+        if (modeImage && echelleIdx < 100) t.push('taille ' + echelleIdx + ' %');
         if (modeImage && formatSortie === 'jpg' && qualiteJpg < 100) t.push('qualité ' + qualiteJpg + ' %');
         const nC = calquesActifs() ? calques.filter(function (c) { return c.vu; }).length : 0;
         if (nC) t.push(nC + (nC > 1 ? ' calques' : ' calque'));
@@ -47554,7 +50534,7 @@
         const o = optionsCourantes();
         const t = instantImage();
         const ga = gifAnimVid();
-        return Object.assign(o, { frame: t, image: true, format: formatImgVid, hote: hoteGif, vitesse: ga ? vitesse : 1, tours: ga ? tours : 0, fige: false, maxImages: 0, lecture: ga ? lecture : 'normale', son: 'garder',
+        return Object.assign(o, { frame: t, total: total, image: true, format: formatImgVid, hote: hoteGif, vitesse: ga ? vitesse : 1, tours: ga ? tours : 0, fige: false, maxImages: 0, lecture: ga ? lecture : 'normale', son: 'garder',
           gifAnime: false, gifCalques: ga, images: null, echelle: 1, qualite: 100, webmCompr: null, lossy: 0, lossyAuto: true, priorite: ga && prioAuto === 'res' ? 'res' : '',
           calques: calquesA(t, o.calques).map(function (c) { return Object.assign({}, c, { t1: null, t2: null }); }),
           textes: calquesA(t, o.textes).map(function (x) { return Object.assign({}, x, { t1: null, t2: null }); }),
@@ -47649,7 +50629,7 @@
             }
           }
           else if (extOrig === 'webp') animeImg = o.length > 21 && o[12] === 0x56 && o[13] === 0x50 && o[14] === 0x38 && o[15] === 0x58 && !!(o[20] & 0x02);
-          if (animeImg && formatSortie !== 'gif') formatSortie = 'gif';
+          if (animeImg && formatSortie !== 'gif' && !(extOrig === 'gif' && (formatSortie === 'png' || formatSortie === 'jpg'))) formatSortie = 'gif';
           if (rep && animeImg && extOrig === 'gif' && delaisGif.length > 1 && /^(png|jpg)$/.test(rep.format || '')) formatSortie = rep.format;
           if (!fini) { peindreFormat(); if (total) rafraichir(); }
         }, function () {  });
@@ -47903,7 +50883,7 @@
       let n = 0;
       return (function essai() {
         n++;
-        return enTetes(l).then(function (r) {
+        return enTetesSurs(l).then(function (r) {
           const vide = r.status >= 200 && r.status < 300 && r.longueur === 0;
           try { console.info('[Uploads+] contrôle du fichier rendu : ' + (r.status || 'impossible') + (r.longueur != null ? ', ' + r.longueur + ' o' : '') + (vide ? ' -> VIDE, essai ' + n : ' -> OK') + ' (' + l + ')'); } catch (e) {  }
           if (!vide) return l;
@@ -47941,6 +50921,9 @@
         else suite.then(ok3, ko3);
       });
     }
+
+    let fichierPrep = null;
+    const reglageEditeur = function () { return (source && typeof source !== 'string' && source._upReglageGif) || (fichierPrep && fichierPrep._upReglageGif) || null; };
     let tailleFichier = typeof source !== 'string' && source ? source.size : 0;
     let typeFichier = typeof source !== 'string' && source ? source.type : '';
     function dire(t, couleur) {
@@ -47954,6 +50937,7 @@
 
     const promesse = new Promise(function (resolve, reject) {
       function erreur(err) {
+        try { ezgifNoter('ÉCHEC de l\'envoi : ' + String((err && err.message) || err).slice(0, 200)); } catch (e) {  }
         fini = true;
         if (vague.style.display !== 'none') progression(1);
         rempli.style.background = '#E06C75';
@@ -47964,7 +50948,7 @@
 
         const annule = /annulé/.test(err.message || '');
 
-        const rg = hote === HOTES.gif && source && source._upReglageGif;
+        const rg = hote === HOTES.gif && reglageEditeur();
         const edite = !!(rg && (rg.image || formatVideo(rg.format) || avecRetouches(rg) || rg.lossy || (rg.calques && rg.calques.length) || (rg.textes && rg.textes.length)));
 
         if (rg && rg.image && !annule && !options.sansRepli) {
@@ -48035,6 +51019,11 @@
         else reject(err);
         if (annule) retirer(800);
       }
+      try {
+        ezgifNoter('DÉPART ' + (typeof source === 'string' ? 'lien ' + String(source).slice(0, 120) : (source && source.name || '?') + ' (' + (source && source.type || '?') + ', ' + tailleLisible(source && source.size || 0) + ')') +
+          ' · hébergeur ' + cleDe(hote) + (options.hote ? ' (demandé : ' + options.hote + ')' : ' (défaut)') + ' · réglages de l\'éditeur déjà là : ' + (source && typeof source !== 'string' && source._upReglageGif ? 'oui' : 'non') +
+          (options.noteRepli ? ' · repli : ' + options.noteRepli : '') + (options.essayes && options.essayes.length ? ' · déjà essayés : ' + options.essayes.join(', ') : ''));
+      } catch (e) {  }
       const fichier = typeof source === 'string'
         ? (nom.textContent = (String(source).split(/[?#]/)[0].split('/').pop() || 'lien'), dire('Récupération de l\'image…'), telechargerLien(source))
         : Promise.resolve(source);
@@ -48058,12 +51047,23 @@
         if (hote.images && !/^image\//i.test(f.type) && !videoEnGifOk) throw refus(hote.nom + ' n\'accepte que les images.');
         if (hote.max && f.size > hote.max) throw refus('trop lourd : ' + tailleLisible(f.size) + ', ' + hote.nom + ' accepte ' + (hote.maxTexte || tailleLisible(hote.max)) + ' maximum.');
         if (!hote.preparer) return { fichier: f };
+        fichierPrep = f;
         dire('Vérification…');
         return hote.preparer(f, function (t, x) { if (!fini) { dire(t); progression(x, t); } }, { agrandir: !!options.agrandir });
       }).then(function (prep) {
         if (fini) return;
         if (prep && prep.fichier) prep.fichier = renommerEnvoi(prep.fichier, options.nom);
         const f = prep.fichier;
+
+        const rgE = reglageEditeur();
+        ezgifNoter('ENVOI ' + (f.name || '?') + ' (' + (f.type || '?') + ', ' + tailleLisible(f.size) + ') vers ' + (hote === HOTES.gif ? 'Éditeur → ' + ((f._upOptions && f._upOptions.hote) || 'noelshack') : hote.nom) +
+          ' · éditeur : ' + (rgE ? (rgE.image ? 'image ' + rgE.format + (rgE.images ? ' (image ' + (rgE.images.de + 1) + ' sur ' + rgE.images.n + ')' : '') : 'vidéo ' + rgE.format) : 'non') +
+          (options.noteRepli ? ' · repli : ' + options.noteRepli : '') + (prep.note ? ' · ' + String(prep.note).slice(0, 160) : ''));
+        if (rgE && rgE.image && /^(png|jpg)$/.test(rgE.format) && /gif/i.test(f.type || '')) {
+          const e = new Error('Éditeur : l\'image devait partir en ' + rgE.format.toUpperCase() + ', pas en GIF (envoi arrêté). Copie le rapport ezgif 📋 et réessaie.');
+          e.definitif = true;
+          throw e;
+        }
 
         noteFinale = prep.note || '';
         garderCarte = !!(f._upVideo);
@@ -48110,6 +51110,7 @@
         }, function (e) { clearInterval(minuteurEstime); throw e; });
       }).then(function (lien) {
         if (!lien) return;
+        try { ezgifNoter('ENVOYÉ ' + String(lien).slice(0, 160)); } catch (e) {  }
         fini = true;
         progression(1);
         rempli.style.background = '#4CAF50';
@@ -48154,7 +51155,7 @@
           const nomH = nomHoteFin || hote.nom;
 
           dire('⚠ Envoyé, mais l\'image ' + nomH + ' ne s\'affiche pas chez toi. Recherche de la cause…', '#E0A84F');
-          enTetes(lien).then(function (r) {
+          enTetesSurs(lien).then(function (r) {
             const ok2 = r.status >= 200 && r.status < 300;
             let t;
             let debut = '⚠ Envoyé, mais ';
@@ -49686,7 +52687,7 @@
   const GAB_ORIGINALE = 4;
   const GAB_PX_MIN = 50;
   const GAB_PX_MAX = 2000;
-  const GAB_RE_HOTE = /^https?:\/\/(?:image\.noelshack\.com|(?:www\.)?noelshack\.com|i\.imgur\.com|files\.catbox\.moe|litter\.catbox\.moe)\//i;
+  const GAB_RE_HOTE = /^https?:\/\/(?:image\.noelshack\.com|(?:www\.)?noelshack\.com|(?:i\.)?imgur\.com|files\.catbox\.moe|litter\.catbox\.moe)\//i;
   const GAB_RE_IMAGE = /\.(?:png|jpe?g|gif|webp|avif|bmp)$/i;
 
   const GAB_RE_SITE = /^https?:\/\/(?:www\.)?nanachannel\.moe\/+media\/uploads\//i;
@@ -49694,11 +52695,11 @@
   function gabHoteOk(u) { return GAB_RE_HOTE.test(u || '') || GAB_RE_SITE.test(u || ''); }
 
   function gabUrlSite(nom) { return 'https://nanachannel.moe/media/uploads/' + nom; }
-  const GAB_RE_LIEN = /https?:\/\/(?:image\.noelshack\.com|i\.imgur\.com|files\.catbox\.moe|litter\.catbox\.moe)\/[^\s<>"'​-‍⁠-⁤﻿]+?\.(?:png|jpe?g|gif|webp|avif|bmp|webm|mp4|mov|m4v)(?=$|[^\w.\-\/])/gi;
+  const GAB_RE_LIEN = /https?:\/\/(?:image\.noelshack\.com|(?:i\.)?imgur\.com|files\.catbox\.moe|litter\.catbox\.moe)\/[^\s<>"'​-‍⁠-⁤﻿]+?\.(?:png|jpe?g|gif|webp|avif|bmp|webm|mp4|mov|m4v)(?=$|[^\w.\-\/])/gi;
 
   const GAB_SELECTEUR = '.post-container .content img, [data-citation-inline] img, .preview-box img, .post-container .content video, [data-citation-inline] video, .preview-box video, .miniblog-item .content img, .miniblog-item .content video';
 
-  const GAB_EXCLUS = '.post-avatar, .reactions-bar, .reaction-btn, .reaction-list-btn, .reaction-menu, [data-gab-barre], [data-up-envoi], [data-up-config], [data-cp-ligne]';
+  const GAB_EXCLUS = '.post-avatar, .reactions-bar, .reaction-btn, .reaction-list-btn, .reaction-menu, [data-gab-barre], [data-up-envoi], [data-up-config], [data-cp-ligne], [data-mp-visuel-ed]';
   const GAB_ATTR = 'data-gabarit';
 
   function gabEncoder(v) {
@@ -49905,7 +52906,8 @@
 })();
   } });
 
-  ECO_MODULES.push({ id: "blacklist", nom: "Blacklist+", version: "0.15", desc: "Masquer depuis le ⋮, posts / topics / Fil par personne, notifications, MP.", debut: "idle", page: true, reglages: true, code: function (window, history) {
+  ECO_MODULES.push({ id: "blacklist", nom: "Blacklist+", version: "0.18", desc: "Masquer depuis le ⋮, posts / topics / Fil par personne, notifications, MP.", debut: "idle", page: true, reglages: true, code: function (window, history) {
+    const { setTimeout, setInterval, requestAnimationFrame, requestIdleCallback, MutationObserver, IntersectionObserver, ResizeObserver } = (typeof ecoMesures === 'function' ? ecoMesures : (window.__ecoMesures || function () { return window; }))("blacklist");
 (function () {
   'use strict';
 
@@ -49942,8 +52944,7 @@
       tout: f0.tout === true,
       exceptions: Array.isArray(f0.exceptions) ? f0.exceptions.slice(0, 500) : [],
     };
-
-    return { v: 4, reglages: r, liste: liste, filtres: filtres, scanLe: +o.scanLe || 0, migre: !(o.v >= 4) };
+    return { v: 4, reglages: r, liste: liste, filtres: filtres, migre: !(o.v >= 4) };
   }
   let d = lire();
   if (d.migre) { delete d.migre; try { localStorage.setItem(CLE, JSON.stringify(d)); } catch (e) {  } }
@@ -50145,17 +53146,7 @@
     return { nom: j.username || p, staff: !!(j.is_admin || j.is_moderator) };
   }
 
-  const CLE_VUS = 'nanachan-blacklist-plus-vus';
-  const DUREE_VU = 3 * 3600 * 1000;
-  let vus = (function () { try { const o = JSON.parse(localStorage.getItem(CLE_VUS) || '{}'); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; } })();
-  function dejaVu(k) { return typeof vus[k] === 'number' && Date.now() - vus[k] < DUREE_VU; }
-  function noterVu(k) {
-    const lim = Date.now() - DUREE_VU;
-    Object.keys(vus).forEach(function (x) { if (!(vus[x] > lim)) delete vus[x]; });
-    vus[k] = Date.now();
-    try { localStorage.setItem(CLE_VUS, JSON.stringify(vus)); } catch (e) {  }
-  }
-  function oublierVus() { vus = {}; try { localStorage.removeItem(CLE_VUS); } catch (e) {  } }
+  try { localStorage.removeItem('nanachan-blacklist-plus-vus'); } catch (e) {  }
   let moiCache = '';
   function moi() {
     const a = document.querySelector('header a.bouton-compte[href*="/user/"]');
@@ -50163,115 +53154,43 @@
     if (p) moiCache = p;
     return moiCache;
   }
-  let horsConnexion = false;
-
-  async function demanderEtat(p) {
-    let r;
-    try { r = await fetch(adresse(p), { credentials: 'include', headers: entetes(false) }); } catch (e) { return null; }
-    if (r.status === 401 || r.status === 403) { horsConnexion = true; return null; }
-    if (r.status === 404) return false;
-    if (!r.ok) return null;
-    const j = await lireJson(r);
-    return !!j.is_hidden;
-  }
-  function aDemander(p, staff) {
-    p = String(p || '').trim();
-    const k = cle(p);
-    return !!p && !staff && !entree(p) && !demasques.has(k) && !dejaVu(k) && k !== cle(moi());
-  }
-
-  const fileAuteurs = new Map();
-  let fileEnCours = false;
-  function verifierAuteur(p, staff) {
-    if (horsConnexion || !aDemander(p, staff) || fileAuteurs.has(cle(p))) return;
-    fileAuteurs.set(cle(p), String(p).trim());
-    if (!fileEnCours) viderFile();
-  }
-  async function viderFile() {
-    fileEnCours = true;
-    try {
-      while (fileAuteurs.size && !horsConnexion) {
-        const x = fileAuteurs.entries().next().value;
-        fileAuteurs.delete(x[0]);
-        if (!aDemander(x[1])) continue;
-        const m = await demanderEtat(x[1]);
-        if (m === true) noterMasque(x[1], 'forum');
-        else if (m === false) noterVu(x[0]);
-      }
-    } finally { fileEnCours = false; }
-  }
-
-  let rechercheEnCours = null;
-  function retrouverMasques(avancer) {
-    if (rechercheEnCours) return rechercheEnCours;
-    rechercheEnCours = (async function () {
-      const dire = typeof avancer === 'function' ? avancer : function () {};
-      horsConnexion = false;
-      oublierVus();
-      const candidats = new Map();
-      const ajouter = function (p, staff) { if (aDemander(p, staff)) candidats.set(cle(p), String(p).trim()); };
-      const lire = async function (u, sans) {
-        try {
-          const r = await fetch(u, sans ? { credentials: 'omit', headers: { Accept: 'application/json' } } : { credentials: 'include', headers: entetes(false) });
-          if (!sans && (r.status === 401 || r.status === 403)) horsConnexion = true;
-          return r.ok ? await r.json() : null;
-        } catch (e) { return null; }
-      };
-
-      for (let page = 1; page <= 5 && !horsConnexion; page++) {
-        dire('Liste des sujets… page ' + page + ' / 5');
-        const u = '/nanachannel/loadtopics/?page=' + page;
-        const avec = await lire(u, false);
-        const sans = await lire(u, true);
-        if (!avec || !sans || !Array.isArray(avec.results) || !Array.isArray(sans.results)) break;
-        const ids = new Set(avec.results.map(function (t) { return String(t.id); }));
-        sans.results.forEach(function (t) { if (!ids.has(String(t.id)) && !t.is_epingle) ajouter(t.author && t.author.username); });
-        if (!sans.results.length) break;
-      }
-
-      for (let page = 1; page <= 3 && !horsConnexion; page++) {
-        dire('Fil… page ' + page + ' / 3');
-        const j = await lire('/nanachannel/miniblog/all/?page=' + page, false);
-        if (!j || !Array.isArray(j.results)) break;
-        j.results.forEach(function (x) { const a = x.author || {}; ajouter(a.username, a.is_admin || a.is_moderator); });
-        if (!j.next) break;
-      }
-
-      for (let page = 1; page <= 2 && !horsConnexion; page++) {
-        dire('Messages privés… page ' + page + ' / 2');
-        const j = await lire('/nanachannel/mp/conversations/?page=' + page, false);
-        if (!j || !Array.isArray(j.results)) break;
-        j.results.forEach(function (c) { ajouter(c && c.participant && c.participant.username); });
-        if (!j.next) break;
-      }
-      if (horsConnexion) return { trouves: [], erreur: 'connecte-toi au forum' };
-      const trouves = [];
-      const liste = Array.from(candidats.values());
-      for (let i = 0; i < liste.length && !horsConnexion; i++) {
-        dire('Vérification… ' + (i + 1) + ' / ' + liste.length);
-        if (!aDemander(liste[i])) continue;
-        const m = await demanderEtat(liste[i]);
-        if (m === true) { noterMasque(liste[i], 'forum'); trouves.push(liste[i]); }
-        else if (m === false) noterVu(cle(liste[i]));
-      }
-      if (horsConnexion) return { trouves: trouves, erreur: 'connecte-toi au forum' };
-      d.scanLe = Date.now();
-      ecrire();
-      return { trouves: trouves, erreur: '' };
+  let syncLe = 0;
+  let syncEnCours = null;
+  function synchroniser(force) {
+    if (syncEnCours) return syncEnCours;
+    if (!force && Date.now() - syncLe < 60000) return Promise.resolve(false);
+    syncLe = Date.now();
+    syncEnCours = (async function () {
+      let r, j;
+      try {
+        r = await fetch('/nanachannel/me/hidden-users/', { credentials: 'include', headers: entetes(false) });
+        if (!r.ok) return false;
+        j = await r.json();
+      } catch (e) { return false; }
+      const tab = Array.isArray(j) ? j : (j && Array.isArray(j.results) ? j.results : null);
+      if (!tab) return false;
+      const forum = new Map();
+      tab.forEach(function (u) { const n = u && String(u.username || '').trim(); if (n) forum.set(cle(n), { nom: n, av: String(u.avatar_url || '') }); });
+      let change = false;
+      forum.forEach(function (u, k) {
+        const e = d.liste[k];
+        if (!e || e.staff || e.posts === false || e.nom !== u.nom) {
+          d.liste[k] = { nom: u.nom, ajout: e ? e.ajout : Date.now(), source: e ? e.source : 'forum', posts: true, topics: e && !e.staff ? e.topics !== false : true, fil: e ? e.fil !== false : true, av: u.av };
+          change = true;
+        } else if (u.av && e.av !== u.av) { e.av = u.av; change = true; }
+      });
+      Object.keys(d.liste).forEach(function (k) {
+        const e = d.liste[k];
+        if (e && !e.staff && e.posts !== false && !forum.has(k) && !(Date.now() - (e.ajout || 0) < 15000)) { delete d.liste[k]; change = true; }
+      });
+      if (change) { ecrire(); planifier(); }
+      if (hote && !hote.querySelector('input:focus')) majPanneau();
+      return change;
     })();
-    rechercheEnCours.finally(function () { rechercheEnCours = null; });
-    return rechercheEnCours;
+    syncEnCours.finally(function () { syncEnCours = null; });
+    return syncEnCours;
   }
-
-  function rechercheAuLancement() {
-    let active = 0;
-    try { const c = JSON.parse(localStorage.getItem('nanachannel-eco-plus') || '{}') || {}; active = (c.activesLe && +c.activesLe.blacklist) || 0; } catch (e) {  }
-    if (d.scanLe && !(active > d.scanLe)) return;
-    if (!moi()) return;
-    retrouverMasques(null).then(function (r) {
-      if (r.trouves.length) message('🚫 Blacklist+ : ' + r.trouves.length + ' utilisateur' + (r.trouves.length > 1 ? 's' : '') + ' masqué' + (r.trouves.length > 1 ? 's' : '') + ' sur le forum ajouté' + (r.trouves.length > 1 ? 's' : '') + ' à la liste (' + r.trouves.join(', ') + ').');
-    });
-  }
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') synchroniser(false); });
 
   let boiteMsg = null;
   function message(texte, erreur) {
@@ -50343,6 +53262,8 @@
 
     '[data-bl-panneau] .bl-personne{display:flex;align-items:center;gap:6px}',
     '[data-bl-panneau] .bl-personne .eco-form-nom{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:inherit;text-decoration:none}',
+    '[data-bl-panneau] .bl-av{flex:0 0 auto;width:20px;height:20px;border-radius:50%;object-fit:cover;background:rgba(127,127,127,.25)}',
+    '[data-bl-panneau] .bl-local{flex:0 0 auto;font-size:10.5px;padding:1px 6px;border-radius:9px;border:1px solid var(--dropdown-menu-border,rgba(127,127,127,.4));opacity:.75;white-space:nowrap}',
     '[data-bl-panneau] .bl-puce{font:600 11.5px/1 inherit;font-family:inherit;padding:4px 8px;border-radius:6px;cursor:pointer;border:1px solid var(--dropdown-menu-border,rgba(127,127,127,.4));background:transparent;color:inherit;opacity:.55}',
     '[data-bl-panneau] .bl-puce[aria-pressed="true"]{opacity:1;background:var(--line-color,#8a63d2);border-color:transparent;color:var(--button-text-color,#fff)}',
     '[data-bl-panneau] .bl-puce[disabled],[data-bl-panneau] .bl-croix[disabled]{opacity:.3;cursor:default}',
@@ -50577,8 +53498,6 @@
           it.removeAttribute('data-bl-fil');
           retirerBandeau(it);
         }
-
-        if (pseudo) verifierAuteur(pseudo);
       }
     });
   }
@@ -50616,11 +53535,24 @@
   }
 
   function actualiserTopic() {
-    const b = Array.from(document.querySelectorAll('button.refresh-text-btn')).find(function (x) {
-      return !x.closest('[data-pp], .auto-refresh-controle, [data-eco-ui]');
-    });
+
+    return quandActualiserPret(function () {
+      return Array.from(document.querySelectorAll('button.refresh-text-btn')).find(function (x) {
+        return !x.closest('[data-pp], .auto-refresh-controle, [data-eco-ui]');
+      }) || null;
+    }, clicSansPropager);
+  }
+
+  function quandActualiserPret(trouver, faire) {
+    const b = trouver();
     if (!b) return false;
-    clicSansPropager(b);
+    if (!b.disabled) { faire(b); return true; }
+    let n = 0;
+    const t = setInterval(function () {
+      const x = trouver();
+      if (x && !x.disabled) { clearInterval(t); faire(x); }
+      else if (++n > 50) clearInterval(t);
+    }, 100);
     return true;
   }
 
@@ -50810,8 +53742,10 @@
     XP.open = function (methode, url) {
       const c = String(methode).toUpperCase() === 'GET' ? chemin(url) : '';
       this._bl = /\/nanachannel\/me\/notifications\/?$/.test(c) ? { type: 'notifs', url: url } : /\/nanachannel\/mp\/unread-count\/?$/.test(c) ? { type: 'nonlus', url: url } : null;
+      const masquage = String(methode).toUpperCase() === 'POST' && /\/nanachannel\/users\/[^/]+\/hide\/?$/.test(chemin(url));
       this.addEventListener('load', function () {
         if (this.responseURL && estListe(this.responseURL)) { derniereListe = this.responseURL; planifier(); }
+        if (masquage && this.status >= 200 && this.status < 300) setTimeout(function () { synchroniser(true); }, 200);
       });
       return ouvrir0.apply(this, arguments);
     };
@@ -50989,7 +53923,6 @@
     return l;
   }
   let jetonTopics = 0;
-  const decouvertes = {};
 
   function poserAvant(w, noeud, ref) {
     if (noeud.parentNode !== w || noeud.nextSibling !== ref) w.insertBefore(noeud, ref);
@@ -51033,8 +53966,6 @@
     const masquesForum = Object.keys(d.liste).filter(function (k) { const e = d.liste[k]; return !e.staff && e.posts !== false; });
     const remis = masquesForum.some(function (k) { return d.liste[k].topics === false; });
     let besoin = !!url && (style !== 'cache' || remis || premierePage(url) || demasques.size > 0) && (masquesForum.length > 0 || style !== 'cache');
-
-    if (!besoin && url && !horsConnexion && !(Date.now() - (decouvertes[url] || 0) < 600000)) { decouvertes[url] = Date.now(); besoin = true; }
     const places = [];
     if (besoin) {
       const affiches = new Map();
@@ -51062,11 +53993,6 @@
         for (let j = i + 1; j < complet.length && !apres; j++) apres = affiches.get(String(complet[j].id)) || null;
         if (!apres || (!avant && !premierePage(url))) return;
         places.push({ t: t, apres: apres });
-      });
-
-      places.forEach(function (x) {
-        const p = x.t.author && x.t.author.username;
-        if (p && !x.t.is_epingle) verifierAuteur(p);
       });
     }
     if (jeton !== jetonTopics || !w.isConnected) return;
@@ -51173,7 +54099,7 @@
       for (let i = 0; i < ms.length; i++) if (!nosAjouts(ms[i])) { planifier(); return; }
     }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
     tout();
-    setTimeout(rechercheAuLancement, 1500);
+    setTimeout(function () { if (moi()) synchroniser(true); }, 1200);
   }
   if (document.body) demarrer(); else document.addEventListener('DOMContentLoaded', demarrer, { once: true });
 
@@ -51225,6 +54151,12 @@
     l.setAttribute('data-bl-ligne', e.nom.toLowerCase());
     const n = el('a', 'eco-form-nom', e.nom);
     n.href = '/user/' + encodeURIComponent(e.nom);
+
+    const av = el(e.av ? 'img' : 'span', 'bl-av');
+    if (e.av) { av.src = e.av; av.alt = ''; av.loading = 'lazy'; }
+    const local = !!e.staff || e.posts === false;
+    const tag = local ? el('span', 'bl-local', 'chez toi') : null;
+    if (tag) tag.title = e.staff ? 'Modérateur / admin : le forum ne le masque pas, caché dans ce navigateur seulement' : 'Topics seuls : pas masqué sur le forum, ses topics cachés dans ce navigateur';
     n.title = 'Profil de ' + e.nom + (e.ajout ? ' — ajouté le ' + new Date(e.ajout).toLocaleDateString('fr-FR') : '');
     const puces = [['posts', 'Posts', e.staff ? 'Ses messages cachés chez toi' : 'Ses messages masqués (masquage du forum : il retire aussi ses topics de la liste)'],
       ['topics', 'Topics', e.staff || e.posts === false ? 'Ses topics cachés chez toi' : 'Ses topics masqués (décoché : Blacklist+ remet ses vrais topics dans la liste)'],
@@ -51257,7 +54189,9 @@
         message('👁 ' + e.nom + ' est démasqué.');
       }).catch(function (x) { croix.disabled = false; message('Impossible de démasquer ' + e.nom + ' : ' + x.message + '.', true); });
     });
-    l.append(n, boutons[0], boutons[1], boutons[2], croix);
+    l.append(av, n);
+    if (tag) l.appendChild(tag);
+    l.append(boutons[0], boutons[1], boutons[2], croix);
     return l;
   }
   function blocListe(racine, titre, entrees, vide, avant) {
@@ -51280,7 +54214,7 @@
     racine.appendChild(el('div', 'eco-form-titre', 'Options'));
     racine.appendChild(ligneInter('Cacher les >>n° qui visent un post masqué', 'Citations et « Répondu par » vers les messages des utilisateurs masqués', 'citations'));
     racine.appendChild(ligneInter('Cacher leurs notifications du forum', 'Réponses et mentions des utilisateurs dont les posts sont masqués : la cloche ne s\'allume pas pour eux', 'notifications'));
-    racine.appendChild(ligneChoix('Leurs MP', 'Discussions privées avec les utilisateurs dont les posts sont masqués (le forum ne permet pas de bloquer les MP)', 'mp', [['corbeille', 'Corbeille', 'Rangées dans la corbeille de MP+ ; la pastille ✉ ne compte pas leurs messages (rien n\'est marqué lu)'], ['normal', 'Normal', 'Comme les autres discussions']]));
+    racine.appendChild(ligneChoix('Leurs MP', 'Discussions privées avec les utilisateurs masqués. Le masquage du forum (Mon compte → Bloqués) cache leurs topics et remplace leurs posts, mais ne prévoit rien pour les MP', 'mp', [['corbeille', 'Corbeille', 'Rangées dans la corbeille de MP+ ; la pastille ✉ ne compte pas leurs messages (rien n\'est marqué lu)'], ['normal', 'Normal', 'Comme les autres discussions']]));
     racine.appendChild(ligneInter('Demander confirmation avant de masquer', 'Avec « 🚫 Masquer » du menu ⋮ d\'un post et ce panneau', 'confirmer'));
 
     const ajout = el('div', 'eco-form-ligne');
@@ -51308,79 +54242,27 @@
     ajout.append(champ, bAjout);
 
     const tous = Object.keys(d.liste).map(function (k) { return d.liste[k]; }).sort(function (a, b) { return a.nom.localeCompare(b.nom, 'fr', { sensitivity: 'base' }); });
-    const users = tous.filter(function (e) { return !e.staff; });
-    const staff = tous.filter(function (e) { return e.staff; });
     if (tous.length > 6) {
       const lf = el('div', 'eco-form-ligne');
       const f = el('input', 'bl-champ');
       f.type = 'search';
-      f.placeholder = 'Chercher dans les listes…';
+      f.placeholder = 'Chercher dans la liste…';
       f.value = filtreListe;
       f.addEventListener('input', function () { filtreListe = f.value; filtrer(); });
       f.addEventListener('keydown', function (e) { e.stopPropagation(); });
       lf.appendChild(f);
       racine.appendChild(lf);
     }
-    blocListe(racine, 'Utilisateurs masqués', users, 'Personne. Masque quelqu\'un avec ⋮ → « 🚫 Masquer » sur un de ses posts, le champ ci-dessus ou son profil.', [ajout, etatAjout]);
-    racine.appendChild(el('div', 'eco-form-note', 'Posts = masquage du forum (lié à ton compte) ; décocher « Topics » remet ses topics dans la liste. Topics seuls = ses topics cachés chez toi, ses messages visibles. Fil = ses posts du Fil et de son mini-blog, cachés chez toi. Les topics épinglés restent toujours visibles.'));
-    blocListe(racine, 'Modérateurs et admins (chez toi)', staff, 'Personne. Le forum ne permet pas de les masquer : ⋮ → « 🚫 Masquer (chez moi) » sur un de leurs posts cache leurs messages et leurs topics dans ce navigateur seulement.');
+
+    blocListe(racine, 'Utilisateurs masqués', tous, 'Personne. Masque quelqu\'un avec ⋮ → « 🚫 Masquer » sur un de ses posts, le champ ci-dessus ou son profil.', [ajout, etatAjout]);
+    racine.appendChild(el('div', 'eco-form-note', 'Même liste que Mon compte → Bloqués (relue au lancement et à l\'ouverture de ce panneau), plus les modérateurs / admins et les « topics seuls », marqués « chez toi » : le forum ne les masque pas, ils sont cachés dans ce navigateur seulement. Posts = masquage du forum ; décocher « Topics » remet ses topics dans la liste. Fil = ses posts du Fil et de son mini-blog, cachés chez toi. Les topics épinglés restent toujours visibles.'));
     function filtrer() {
       const q = filtreListe.trim().toLowerCase();
       racine.querySelectorAll('[data-bl-ligne]').forEach(function (l) { l.style.display = !q || l.getAttribute('data-bl-ligne').indexOf(q) !== -1 ? '' : 'none'; });
     }
     filtrer();
-    if (users.length) {
-      const lv = el('div', 'eco-form-ligne');
-      const bv = el('button', 'eco-btn', '↻ Vérifier auprès du forum');
-      bv.type = 'button';
-      bv.title = 'Remet à jour les « Posts » de chacun d\'après le forum (démasqués ailleurs, depuis leur profil…)';
-      const ev = el('span', 'eco-form-note');
-      bv.addEventListener('click', async function () {
-        bv.disabled = true;
-        let changes = 0, erreurs = 0;
-        const liste = users.map(function (e) { return e.nom; });
-        for (let i = 0; i < liste.length; i++) {
-          ev.textContent = 'Vérification… ' + (i + 1) + ' / ' + liste.length;
-          const k = cle(liste[i]);
-          try {
-            const m = await etat(liste[i]);
-            const e = d.liste[k];
-            if (!e) continue;
-            if (m !== (e.posts !== false)) {
-              changes++;
-              if (m) e.posts = true;
-              else delete d.liste[k];
-            }
-          } catch (x) { erreurs++; }
-        }
-        ecrire();
-        dessinerPanneau();
-        planifier();
-        message('Liste vérifiée : ' + (changes ? changes + ' mise' + (changes > 1 ? 's' : '') + ' à jour' : 'tout est à jour') + (erreurs ? ' · ' + erreurs + ' erreur(s) (connecté ?)' : '') + '.');
-      });
-      lv.append(bv, ev);
-      racine.appendChild(lv);
-    }
     dessinerFiltres(racine);
-
-    racine.appendChild(el('div', 'eco-form-titre', 'Retrouver mes masqués'));
-    const lr = el('div', 'eco-form-ligne');
-    const br = el('button', 'eco-btn', '🔎 Retrouver mes masqués');
-    br.type = 'button';
-    br.title = 'Cherche les utilisateurs masqués sur le forum (depuis leur profil, ou quand Blacklist+ était désactivé) : liste des sujets, Fil et MP. Lectures seulement.';
-    const er = el('span', 'eco-form-note');
-    if (rechercheEnCours) { br.disabled = true; er.textContent = 'Recherche en cours…'; }
-    br.addEventListener('click', function () {
-      br.disabled = true;
-      retrouverMasques(function (t) { if (er.isConnected) er.textContent = t; }).then(function (r) {
-        const n = r.trouves.length;
-        message(r.erreur ? 'Recherche incomplète : ' + r.erreur + '.' : n ? '🚫 ' + n + ' masqué' + (n > 1 ? 's' : '') + ' retrouvé' + (n > 1 ? 's' : '') + ' : ' + r.trouves.join(', ') + '.' : 'Aucun autre masqué trouvé : la liste est à jour.', !!r.erreur);
-        dessinerPanneau();
-      });
-    });
-    lr.append(br, er);
-    racine.appendChild(lr);
-    racine.appendChild(el('div', 'eco-form-note', 'Le forum ne donne pas la liste de tes masqués : Blacklist+ la retrouve (topics absents de la liste des sujets, auteurs du Fil, MP) au premier lancement, quand tu réactives le module, avec « 🔎 Retrouver mes masqués », et au fil de ta navigation (posts, profils, Fil). Corbeille des MP : bouton « 🗑 Corbeille » en haut de tes discussions privées (MP+).'));
+    racine.appendChild(el('div', 'eco-form-note', 'Corbeille des MP : bouton « 🗑 Corbeille » en haut de tes discussions privées (MP+).'));
     hote.replaceChildren(racine);
   }
   function majPanneau() { if (hote) dessinerPanneau(); }
@@ -51462,12 +54344,14 @@
     hote = e.target;
     d = lire();
     dessinerPanneau();
+    if (Date.now() - syncLe > 10000) synchroniser(true);
     hote.addEventListener('eco-reglages-fermer', function () { hote = null; }, { once: true });
   });
 })();
   } });
 
   ECO_MODULES.push({ id: "fil", nom: "Fil+", version: "0.35", desc: "Écrire dans le Fil, pages numérotées, modifier / supprimer ses posts, recherche (Fil et mini-blogs), suivre des blogs (alertes avec Notifications+).", debut: "idle", page: true, reglages: true, code: function (window, history) {
+    const { setTimeout, setInterval, requestAnimationFrame, requestIdleCallback, MutationObserver, IntersectionObserver, ResizeObserver } = (typeof ecoMesures === 'function' ? ecoMesures : (window.__ecoMesures || function () { return window; }))("fil");
 (function () {
   'use strict';
 
@@ -53183,6 +56067,7 @@
   } });
 
   ECO_MODULES.push({ id: "sondage", nom: "Sondage+", version: "0.9", desc: "Sondages StrawPoll dans les messages (bouton Sondage+, résultats sous le lien), choix déplaçables.", debut: "idle", page: false, reglages: true, code: function (GM_getValue, GM_setValue, GM_info) {
+    const { setTimeout, setInterval, requestAnimationFrame, requestIdleCallback, MutationObserver, IntersectionObserver, ResizeObserver } = (typeof ecoMesures === 'function' ? ecoMesures : (window.__ecoMesures || function () { return window; }))("sondage");
 (function () {
   'use strict';
 
@@ -54251,6 +57136,7 @@ html[data-sdp-glisse],html[data-sdp-glisse] *{cursor:grabbing!important}
   } });
 
   ECO_MODULES.push({ id: "vocaroo", nom: "Vocaroo+", version: "0.14", desc: "Enregistrer ou envoyer un son sur Vocaroo depuis la barre d'outils, collections de Vocaroo (liste ou soundboard, lecteur avec la forme du son).", debut: "idle", page: false, reglages: true, code: function (GM_getValue, GM_setValue, GM_info) {
+    const { setTimeout, setInterval, requestAnimationFrame, requestIdleCallback, MutationObserver, IntersectionObserver, ResizeObserver } = (typeof ecoMesures === 'function' ? ecoMesures : (window.__ecoMesures || function () { return window; }))("vocaroo");
 (function () {
   'use strict';
 
@@ -56953,7 +59839,8 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
 })();
   } });
 
-  ECO_MODULES.push({ id: "profil", nom: "Profil+", version: "0.17", desc: "Carte du membre au survol d'un pseudo, page de profil plus lisible, activité plus longue.", debut: "idle", page: true, reglages: true, code: function (window, history) {
+  ECO_MODULES.push({ id: "profil", nom: "Profil+", version: "0.18", desc: "Carte du membre au survol d'un pseudo, page de profil plus lisible, activité plus longue.", debut: "idle", page: true, reglages: true, code: function (window, history) {
+    const { setTimeout, setInterval, requestAnimationFrame, requestIdleCallback, MutationObserver, IntersectionObserver, ResizeObserver } = (typeof ecoMesures === 'function' ? ecoMesures : (window.__ecoMesures || function () { return window; }))("profil");
 (function () {
   'use strict';
 
@@ -57098,7 +59985,7 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
   function lireJson(k, def) { try { const v = JSON.parse(localStorage.getItem(k) || 'null'); return v == null ? def : v; } catch (e) { return def; } }
   function ecrireJson(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } }
   function json(url) {
-    return fetch(url, { credentials: 'include', headers: { Accept: 'application/json' }, cache: 'no-store' }).then(function (r) {
+    return fetch(url, { credentials: 'include', headers: { Accept: 'application/json' }, cache: 'no-store', eco: 'fond', ecoCache: 600000 }).then(function (r) {
       if (r.status === 404) return null;
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.json();
@@ -59115,6 +62002,35 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
         ' · 1er contenu à ' + ms(peint['first-contentful-paint']) + ' · page prête à ' + ms(nav.domContentLoadedEventStart) +
         ' · thème perso : ' + (h.getAttribute('data-tp-theme') || 'aucun'));
     } catch (e) { l.push('Chargement : ? (' + e.message + ')'); }
+
+    try {
+      l.push('');
+      l.push('Performances :');
+      const r0 = function (x) { return Math.round(x); };
+      let regles = 0;
+      try { Array.prototype.forEach.call(document.styleSheets, function (f) { try { regles += f.cssRules.length; } catch (e) {  } }); } catch (e) {  }
+      const mem = (ECO_PAGE && ECO_PAGE.performance && ECO_PAGE.performance.memory) || performance.memory;
+      l.push('  Page : ' + document.querySelectorAll('.post-container[id^="post-"]').length + ' posts · ' + document.getElementsByTagName('*').length + ' éléments · ' +
+        document.styleSheets.length + ' feuilles de style (' + regles + ' règles)' + (mem ? ' · mémoire JS ' + r0(mem.usedJSHeapSize / 1048576) + ' Mo' : '') +
+        ' · ouverte depuis ' + r0((performance.now() - ECO_CONSO.depuis) / 1000) + ' s');
+      const L = ECO_CONSO.longues;
+      if (L) l.push('  Tâches longues (≥ 50 ms, toute la page) : ' + L.n + (L.n ? ' · total ' + r0(L.ms) + ' ms · la plus longue ' + r0(L.max) + ' ms' : ''));
+      const conso = ecoConsoTout();
+      if (!ECO_CONSO.on) l.push('  Consommation par module : mesure en pause depuis ' + new Date(ECO_CONSO.pauseLe).toLocaleTimeString('fr-FR') + ' (chiffres figés)');
+      if (conso.length) {
+        l.push('  Consommation par module (du plus au moins) :');
+        conso.forEach(function (c) { l.push('    ' + c.nom + ' [' + c.niveau + '] ' + ecoConsoTexte(c)); });
+      }
+      let pt = null;
+      try { pt = JSON.parse(localStorage.getItem('eco-porte-posts') || 'null'); } catch (e) { pt = null; }
+      if (pt && Array.isArray(pt.t)) {
+        const n = Date.now();
+        const min = pt.t.filter(function (x) { return x > n - 60000; }).length;
+        const k = (Array.isArray(pt.k) ? pt.k : []).map(function (x) { return new Date(x).toLocaleTimeString('fr-FR'); });
+        l.push('  Porte des pages (lectures de posts) : ' + min + ' / 20 sur la dernière minute' + (pt.b > n ? ' · BLOQUÉE encore ' + r0((pt.b - n) / 1000) + ' s' : '') +
+          ' · refus du serveur (429) récents : ' + (k.length ? k.join(', ') : 'aucun'));
+      }
+    } catch (e) { l.push('  ? (' + e.message + ')'); }
     l.push('');
     l.push('Modules :');
     ECO_MODULES.forEach(function (m) {
@@ -59140,6 +62056,14 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
     l.push('  ECO+ : ' + JSON.stringify(ecoReglages));
 
     try {
+      const d = JSON.parse(sessionStorage.getItem('nanachan-pages-plus-diag-liste') || '[]');
+      if (d.length) { l.push(''); l.push('Pages+ (page de la liste, cet onglet) :'); d.forEach(function (x) { l.push('  ' + JSON.stringify(x)); }); }
+
+      const u = JSON.parse(sessionStorage.getItem('nanachan-uploads-plus-diag') || '[]');
+      if (u.length) { l.push(''); l.push('Uploads+ (derniers envois, cet onglet) :'); u.forEach(function (x) { l.push('  ' + x); }); }
+    } catch (e) {  }
+
+    try {
       const d = localStorage.getItem('nanachan-mp-plus-diag-cache');
       if (d) { l.push(''); l.push('MP+ (discussions privées) :'); l.push('  ' + d); }
     } catch (e) {  }
@@ -59154,8 +62078,20 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
     };
   }
 
+  function ecoApresRendu(f) {
+    let fait = false;
+    const go = function () { if (!fait) { fait = true; f(); } };
+    try { requestAnimationFrame(function () { setTimeout(go, 0); }); } catch (e) { setTimeout(go, 0); }
+    setTimeout(go, 1500);
+  }
   function ecoLancerModule(m) {
     if (!ecoActifsAuChargement[m.id]) { m.etat = 'off'; return; }
+    const t0 = performance.now();
+    try { ecoLancerModuleIci(m); } finally {
+      if (!m.attente) ECO_CONSO.lancement[m.id] = (ECO_CONSO.lancement[m.id] || 0) + performance.now() - t0;
+    }
+  }
+  function ecoLancerModuleIci(m) {
     try {
       if (m.page) {
         if (ECO_FIREFOX && !document.documentElement) {
@@ -59184,7 +62120,16 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
     }
   }
 
+  let ecoMesuresPage = false;
   function ecoInjecter(m) {
+    if (!ecoMesuresPage) {
+
+      ecoMesuresPage = true;
+      const a = document.createElement('script');
+      a.textContent = 'try{Object.defineProperty(window,"__ecoMesures",{value:(' + ecoMesuresUsine.toString() + ')(window,{},true),configurable:true});}catch(e){}';
+      (document.head || document.documentElement).appendChild(a);
+      a.remove();
+    }
     const marque = 'data-eco-page-' + m.id;
     const s = document.createElement('script');
     s.textContent = 'try{document.documentElement.setAttribute(' + JSON.stringify(marque) + ',"");(' + m.code.toString() + ')(window,history);}' +
@@ -59194,6 +62139,36 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
     const ok = document.documentElement.hasAttribute(marque);
     document.documentElement.removeAttribute(marque);
     return ok;
+  }
+
+  function ecoConsoTout() {
+    const fond = {};
+    function ajouter(src) {
+      Object.keys(src || {}).forEach(function (k) {
+        const a = src[k], c = fond[k] || (fond[k] = { ms: 0, n: 0, max: 0, lents: 0 });
+        c.ms += +a.ms || 0; c.n += +a.n || 0; c.max = Math.max(c.max, +a.max || 0); c.lents += +a.lents || 0;
+      });
+    }
+    ajouter(ECO_CONSO.fond);
+    let page = null;
+    const ec = function (e) { try { page = JSON.parse(e.detail); } catch (x) {  } };
+    document.addEventListener('eco-conso', ec);
+    try { document.dispatchEvent(new CustomEvent('eco-conso-lire')); } catch (e) {  }
+    document.removeEventListener('eco-conso', ec);
+    ajouter(page);
+    const minutes = Math.max(1, ecoConsoDuree() / 60000);
+    return ECO_MODULES.filter(function (m) { return m.etat === 'ok'; }).map(function (m) {
+      const f = fond[m.id] || { ms: 0, n: 0, max: 0, lents: 0 };
+      const lance = ECO_CONSO.lancement[m.id] || 0;
+      const parMin = f.ms / minutes;
+      const niveau = lance >= 150 || parMin >= 600 || f.lents >= 3 ? 'élevé' : lance >= 40 || parMin >= 120 || f.lents ? 'moyen' : 'léger';
+      return { id: m.id, nom: m.nom, lancement: lance, fond: f.ms, parMin: parMin, appels: f.n, max: f.max, lents: f.lents, niveau: niveau,
+        score: lance + parMin * 2 };
+    }).sort(function (a, b) { return b.score - a.score; });
+  }
+  function ecoConsoTexte(c) {
+    const r = function (x) { return x < 10 ? x.toFixed(1) : String(Math.round(x)); };
+    return 'Lancement ' + r(c.lancement) + ' ms · en fond ' + r(c.parMin) + ' ms/min (' + c.appels + ' rappels, le plus long ' + r(c.max) + ' ms' + (c.lents ? ', ' + c.lents + ' de 50 ms ou plus' : '') + ')';
   }
 
   const IMAGES_MOTEURS_DEFAUT = [
@@ -59784,15 +62759,21 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
   function ecoLum(c) { return (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) / 255; }
   function ecoGris(c) { return Math.max(c.r, c.g, c.b) - Math.min(c.r, c.g, c.b) < 30; }
 
-  let ecoFondTheme = null;
+  let ecoFondTheme = null, ecoLigneTheme = null, ecoFondLu = -1e9;
   function ecoLireFondTheme() {
+
+    const n = performance.now();
+    if (n - ecoFondLu < 30) return;
     try {
       const sonde = document.createElement('span');
-      sonde.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden;background:var(--container-color,#fafafa)';
+      sonde.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden;background:var(--container-color,#fafafa);color:var(--line-color,#550e3d)';
       (document.body || document.documentElement).appendChild(sonde);
-      ecoFondTheme = ecoRgba(getComputedStyle(sonde).backgroundColor);
+      const cs = getComputedStyle(sonde);
+      ecoFondTheme = ecoRgba(cs.backgroundColor);
+      ecoLigneTheme = ecoRgba(cs.color);
       sonde.remove();
-    } catch (e) { ecoFondTheme = null; }
+      ecoFondLu = performance.now();
+    } catch (e) { ecoFondTheme = null; ecoLigneTheme = null; }
   }
 
   const ECO_CHAUD_DEF = { couleur: 'forum', perso: '#e94560', intensite: 'auto' };
@@ -59832,7 +62813,7 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
       setTimeout(function () { prevu = false; ecoAppliquerChauds(); }, 60);
     }
     ecoAppliquerChauds();
-    document.addEventListener('DOMContentLoaded', bientot, { once: true });
+
     window.addEventListener('load', bientot, { once: true });
     ['tp-theme-affiche', 'tp-donnees-changees'].forEach(function (ev) { document.addEventListener(ev, bientot); });
     try { new MutationObserver(bientot).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] }); } catch (e) {  }
@@ -60016,6 +62997,14 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
     if (!document.body) return;
     ecoChercherFenetres(document.body);
     Array.from(document.body.children).forEach(ecoChercherFenetres);
+  }
+
+  function ecoCouleursApresRendu() {
+    ecoLireFondTheme();
+    ecoPwaCouleur();
+    ecoDemarrerApparence();
+    ecoAppliquerChauds();
+    ecoMajSurLigne();
   }
   function ecoDemarrerApparence() {
     ecoAppliquerApparence();
@@ -60290,7 +63279,9 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
     }
     const haut = 70, bas = 16;
     const v = Math.min(haut, Math.round(innerHeight - col.offsetHeight - bas)) + 'px';
-    if (h.style.getPropertyValue('--eco-wtop') !== v) h.style.setProperty('--eco-wtop', v);
+    void h;
+
+    if (col.style.getPropertyValue('--eco-wtop') !== v) col.style.setProperty('--eco-wtop', v);
   }
 
   let ecoWFabVu = -1e9, ecoWFabRepris = 0;
@@ -60298,13 +63289,13 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
     const h = document.documentElement;
     const app = col.parentElement && col.parentElement.querySelector(':scope > .app-col');
     if (!app || !h.hasAttribute('data-eco-widgets-retract') || !matchMedia('(max-width:1300px)').matches) {
-      ['--eco-wapp-x', '--eco-wapp-w', '--eco-wfab'].forEach(function (v) { h.style.removeProperty(v); });
+      ['--eco-wapp-x', '--eco-wapp-w', '--eco-wfab'].forEach(function (v) { if (col.style.getPropertyValue(v)) col.style.removeProperty(v); });
       return;
     }
     const a = app.getBoundingClientRect(), pr = col.parentElement.getBoundingClientRect();
     const x = Math.round(a.left - pr.left) + 'px', w = Math.round(a.width) + 'px';
-    if (h.style.getPropertyValue('--eco-wapp-x') !== x) h.style.setProperty('--eco-wapp-x', x);
-    if (h.style.getPropertyValue('--eco-wapp-w') !== w) h.style.setProperty('--eco-wapp-w', w);
+    if (col.style.getPropertyValue('--eco-wapp-x') !== x) col.style.setProperty('--eco-wapp-x', x);
+    if (col.style.getPropertyValue('--eco-wapp-w') !== w) col.style.setProperty('--eco-wapp-w', w);
 
     const reste = 800 - (performance.now() - ecoWFabVu);
     if (reste > 0) {
@@ -60331,7 +63322,7 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
       const dessous = document.documentElement.scrollHeight - (c.bottom + scrollY);
       fab = Math.max(0, Math.round(innerHeight - haut + 12 - dessous));
     }
-    if (h.style.getPropertyValue('--eco-wfab') !== fab + 'px') h.style.setProperty('--eco-wfab', fab + 'px');
+    if (col.style.getPropertyValue('--eco-wfab') !== fab + 'px') col.style.setProperty('--eco-wfab', fab + 'px');
   }
 
   function ecoWidgetsPousse(col) {
@@ -60350,12 +63341,23 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
   (function ecoWidgetsSurveiller() {
     let prevu = false;
     const passe = function () { prevu = false; if (document.documentElement.hasAttribute('data-eco-widgets-retract')) ecoWidgetsPoser(); };
+
+    let prevuDefil = false;
+    const passeDefil = function () {
+      prevuDefil = false;
+      const col = document.querySelector('#app .widget-col');
+      if (col && document.documentElement.hasAttribute('data-eco-widgets-retract') && matchMedia('(max-width:1300px)').matches) ecoWidgetsEtroit(col);
+    };
     const lancer = function () {
       passe();
-      new MutationObserver(function () { if (!prevu) { prevu = true; requestAnimationFrame(passe); } })
-        .observe(document.body, { childList: true, subtree: true });
+      new MutationObserver(function (ms) {
+        if (prevu) return;
+
+        if (ms.every(function (m) { const c = m.target.nodeType === 1 && m.target.closest ? m.target.closest('#app .widget-col') : null; return c && c !== m.target; })) return;
+        prevu = true; requestAnimationFrame(passe);
+      }).observe(document.body, { childList: true, subtree: true });
       addEventListener('resize', function () { if (!prevu) { prevu = true; requestAnimationFrame(passe); } });
-      addEventListener('scroll', function () { if (!prevu) { prevu = true; requestAnimationFrame(passe); } }, { passive: true });
+      addEventListener('scroll', function () { if (!prevu && !prevuDefil) { prevuDefil = true; requestAnimationFrame(passeDefil); } }, { passive: true });
     };
     if (document.body) lancer(); else document.addEventListener('DOMContentLoaded', lancer, { once: true });
   })();
@@ -60474,6 +63476,9 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
     { id: 'rika', defaut: true, attr: 'rika', module: null, nom: 'Page d\'accueil (mise en page)',
       bug: 'L\'image de Rika change de taille avec la fenêtre : énorme, elle passe sur le texte et sort du cadre ; minuscule en fenêtre étroite.',
       fix: 'Haut de l\'accueil en une colonne (titre, écrito, description, Rika, bouton) ; Rika en taille fixe ×2, ou ×1 en fenêtre étroite.' },
+    { id: 'banniere', defaut: true, attr: 'banniere', module: null, nom: 'Bannière d\'évènement continue',
+      bug: 'Le texte de la bannière « ÉVÉNEMENT » défile jusqu\'à sortir entièrement : la bannière reste vide un moment, puis le texte réapparaît d\'un coup. Avec un nom court, il y a aussi des trous entre deux passages.',
+      fix: 'Le nom est répété autant qu\'il faut pour remplir la bannière et le défilement boucle sans coupure, à vitesse constante (60 px par seconde) quelle que soit la longueur du nom. « Aperçu » affiche une bannière d\'essai à sa place dans la liste des sujets, avec le texte de ton choix.' },
   ];
   function ecoFixActif(id) {
     const f = ecoReglages.tweaks && ecoReglages.tweaks.fixes;
@@ -60491,6 +63496,109 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
   }
   ecoAppliquerFixes();
   document.addEventListener('DOMContentLoaded', ecoAppliquerFixes, { once: true });
+
+  const ECO_BN_VITESSE = 60;
+  function ecoBanniereMaj() {
+    const actif = ecoFixActif('banniere');
+    document.querySelectorAll('.event-banner').forEach(function (b) {
+      const piste = b.querySelector('.event-banner-track');
+      if (!piste) return;
+      const groupes = Array.prototype.filter.call(piste.children, function (g) { return g.classList.contains('event-banner-group'); });
+      const enlever = function () {
+        piste.querySelectorAll('[data-eco-bn]').forEach(function (c) { c.remove(); });
+        piste.style.removeProperty('--eco-bn-dur');
+        delete piste.dataset.ecoBnSig;
+      };
+      if (!actif || !groupes.length) { enlever(); return; }
+      const bases = function (g) { return Array.prototype.filter.call(g.children, function (t) { return !t.hasAttribute('data-eco-bn'); }); };
+      const sig = groupes.length + '|' + bases(groupes[0]).map(function (t) { return t.textContent; }).join('\u0001');
+      if (piste.dataset.ecoBnSig !== sig) {
+        enlever();
+        piste.dataset.ecoBnSig = sig;
+        groupes.splice(0, groupes.length);
+        Array.prototype.forEach.call(piste.children, function (g) { if (g.classList.contains('event-banner-group')) groupes.push(g); });
+      }
+      if (groupes.length === 1) {
+        const c = groupes[0].cloneNode(true);
+        c.setAttribute('aria-hidden', 'true');
+        c.setAttribute('data-eco-bn', '');
+        piste.appendChild(c);
+        groupes.push(c);
+      }
+      const larg = b.clientWidth;
+      const modeles = bases(groupes[0]);
+      if (!larg || !modeles.length) return;
+      for (let n = 0; groupes[0].offsetWidth < larg && n < 60; n++) {
+        groupes.forEach(function (g) {
+          const c = modeles[n % modeles.length].cloneNode(true);
+          c.setAttribute('data-eco-bn', '');
+          c.setAttribute('aria-hidden', 'true');
+          g.appendChild(c);
+        });
+      }
+      const w = groupes[0].offsetWidth;
+      if (!w) return;
+      const dur = (w / ECO_BN_VITESSE).toFixed(2) + 's';
+      if (piste.style.getPropertyValue('--eco-bn-dur') !== dur) piste.style.setProperty('--eco-bn-dur', dur);
+    });
+  }
+  setInterval(function () { if (!document.hidden && document.querySelector('.event-banner')) ecoBanniereMaj(); }, 1000);
+  document.addEventListener('eco-fix-change', function (e) { if (e.detail === 'banniere') ecoBanniereMaj(); });
+  window.addEventListener('resize', function () { if (document.querySelector('.event-banner')) ecoBanniereMaj(); });
+
+  function ecoBanniereTexte() {
+    const t = ecoReglages.tweaks && typeof ecoReglages.tweaks.banniereTexte === 'string' ? ecoReglages.tweaks.banniereTexte.trim() : '';
+    return t || 'Aperçu de la bannière';
+  }
+  function ecoBanniereTexteMaj() {
+    const b = document.querySelector('[data-eco-bn-apercu]');
+    if (!b) return;
+    const t = ecoBanniereTexte();
+    b.querySelectorAll('.event-banner-text:not([data-eco-bn])').forEach(function (x) { if (x.textContent !== t) x.textContent = t; });
+    ecoBanniereMaj();
+  }
+  function ecoBanniereApercu() {
+    const deja = document.querySelector('[data-eco-bn-apercu]');
+    if (deja) { deja.remove(); return false; }
+    const lieu = document.querySelector('#app .padded') || document.querySelector('#app .app-col') || document.querySelector('#app') || document.body;
+    const vraie = document.querySelector('.event-banner');
+    const modele = vraie || lieu;
+    const dv = modele && modele.getAttributeNames ? modele.getAttributeNames().filter(function (n) { return /^data-v-/.test(n); }) : [];
+    const el = function (tag, cls) {
+      const e = document.createElement(tag);
+      e.className = cls;
+      dv.forEach(function (n) { e.setAttribute(n, ''); });
+      return e;
+    };
+    const b = el('div', 'event-banner');
+    b.setAttribute('data-eco-bn-apercu', '');
+    b.title = 'Aperçu ECO+ (clic : fermer)';
+    const lab = el('span', 'event-banner-label');
+    lab.textContent = 'ÉVÉNEMENT';
+    const piste = el('div', 'event-banner-track');
+    for (let g = 0; g < 2; g++) {
+      const gr = el('div', 'event-banner-group');
+      if (g) gr.setAttribute('aria-hidden', 'true');
+      for (let t = 0; t < 2; t++) {
+        const sp = el('span', 'event-banner-text');
+        sp.textContent = ecoBanniereTexte();
+        gr.appendChild(sp);
+      }
+      piste.appendChild(gr);
+    }
+    b.append(lab, piste);
+    b.addEventListener('click', function () {
+      b.remove();
+      document.querySelectorAll('.eco-fix-apercu').forEach(function (x) { x.textContent = 'Aperçu'; });
+    });
+
+    if (vraie && vraie.parentNode) vraie.parentNode.insertBefore(b, vraie);
+    else if (lieu.classList && lieu.classList.contains('padded') && lieu.parentNode) lieu.parentNode.insertBefore(b, lieu.nextSibling);
+    else lieu.insertBefore(b, lieu.firstChild);
+    ecoBanniereMaj();
+    try { b.scrollIntoView({ block: 'nearest' }); } catch (x) {  }
+    return true;
+  }
 
   function ecoAlertesChoix() {
     const t = ecoReglages.tweaks && ecoReglages.tweaks.alertesJs;
@@ -60914,6 +64022,143 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
   if (document.body) ecoAppliquerDrapeaux();
   else document.addEventListener('DOMContentLoaded', ecoAppliquerDrapeaux, { once: true });
 
+  function ecoMenuTopicActif() { return !!(ecoReglages.tweaks && ecoReglages.tweaks.menuTopic); }
+  const ecoMT = { cle: '', fav: null, extras: false, occupe: false };
+  function ecoMTStyle() {
+    if (document.getElementById('eco-mt-style')) return;
+    const st = document.createElement('style');
+    st.id = 'eco-mt-style';
+    st.textContent =
+
+      'html[data-eco-mt-cache] #topic-top div:has(> .dropdown-item){visibility:hidden!important;pointer-events:none!important}' +
+
+      '#topic-top div:has(> .eco-mt){display:flex!important;flex-direction:row;align-items:center;gap:2px}' +
+
+      '.eco-mt{display:inline-flex;gap:2px;align-items:center;position:relative;top:7px}' +
+      '.eco-mt button{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;padding:0;border:0;border-radius:6px;cursor:pointer;background:transparent;color:inherit}' +
+      '.eco-mt button:hover{background:rgba(127,127,127,.15)}' +
+      '.eco-mt svg{width:24px;height:24px;display:block}' +
+      '.eco-mt button[aria-pressed="true"]{color:#F2B526}' +
+      '.eco-mt button[aria-pressed="true"] svg path{fill:currentColor}' +
+      '.eco-mt button:disabled{cursor:wait}' +
+      '.eco-mt button[data-eco-mt-ok]{color:#3FB950}';
+    (document.head || document.documentElement).appendChild(st);
+  }
+  function ecoMTAttendre(test, ms) {
+    return new Promise(function (ok) {
+      const t0 = Date.now();
+      (function boucle() { const r = test(); if (r || Date.now() - t0 > ms) ok(r || null); else setTimeout(boucle, 30); })();
+    });
+  }
+
+  function ecoMTAvecMenu(btn, faire) {
+    const p = (ecoMT.file || Promise.resolve()).then(function () { return ecoMTAvecMenuMaintenant(btn, faire); });
+    ecoMT.file = p.catch(function () { return null; });
+    return p;
+  }
+  function ecoMTAvecMenuMaintenant(btn, faire) {
+    if (!btn.isConnected) return Promise.resolve(null);
+    ecoMT.occupe = true;
+    ecoMTStyle();
+    const boite = btn.parentElement;
+    const items = function () { const l = boite ? Array.from(boite.querySelectorAll('.dropdown-item')) : []; return l.length ? l : null; };
+
+    const ouvert = function () {
+      const l = items();
+      if (!l) return false;
+      return !l.some(function (x) { for (let e = x.parentElement; e && e !== boite; e = e.parentElement) { if (/-leave-/.test(e.className || '')) return true; } return false; });
+    };
+    document.documentElement.setAttribute('data-eco-mt-cache', '');
+    const fin = function () {
+
+      if (ouvert()) btn.click();
+      return ecoMTAttendre(function () { return !items(); }, 1500).then(function () {
+        if (ouvert()) btn.click();
+        document.documentElement.removeAttribute('data-eco-mt-cache');
+        ecoMT.occupe = false;
+      });
+    };
+    return new Promise(function (ok) { setTimeout(ok, 0); }).then(function () {
+      if (!ouvert()) btn.click();
+      return ecoMTAttendre(function () { return ouvert() ? items() : null; }, 1200);
+    }).then(function (l) {
+      const r = l ? faire(l) : null;
+      return new Promise(function (ok) { setTimeout(ok, 120); }).then(fin).then(function () { return r; });
+    }, function () { return fin().then(function () { return null; }); });
+  }
+  function ecoMTPeindre(barre) {
+    const bf = barre.querySelector('[data-eco-mt-fav]');
+    if (!bf) return;
+    const oui = ecoMT.fav === true;
+    bf.setAttribute('aria-pressed', String(oui));
+    bf.title = oui ? 'Retirer des favoris' : 'Ajouter en favoris';
+    bf.setAttribute('aria-label', bf.title);
+  }
+  function ecoMTPoser() {
+    const actif = ecoMenuTopicActif() && /^\/topics\//.test(location.pathname);
+    const btn = document.querySelector('#topic-top button.menu-btn');
+    document.querySelectorAll('.eco-mt').forEach(function (b) { if (!actif || !btn || b.nextElementSibling !== btn) b.remove(); });
+    document.querySelectorAll('#topic-top button.menu-btn[data-eco-mt-sans]').forEach(function (b) { b.removeAttribute('data-eco-mt-sans'); });
+    if (!actif || !btn || ecoMT.occupe) return;
+    const cle = location.pathname.split('/')[2] || '';
+    let barre = btn.previousElementSibling && btn.previousElementSibling.classList.contains('eco-mt') ? btn.previousElementSibling : null;
+    if (barre && ecoMT.cle === cle) return;
+    if (!barre) {
+      ecoMTStyle();
+      barre = document.createElement('span');
+      barre.className = 'eco-mt';
+      barre.setAttribute('data-eco-ui', '');
+      const fav = document.createElement('button');
+      fav.type = 'button';
+      fav.setAttribute('data-eco-mt-fav', '');
+      fav.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2.8l2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2l-5.6 3 1.1-6.3-4.6-4.4 6.3-.9z"/></svg>';
+      const lien = document.createElement('button');
+      lien.type = 'button';
+      lien.title = 'Copier le lien';
+      lien.setAttribute('aria-label', 'Copier le lien');
+      lien.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7.1 7.1l1.7-1.7"/></svg>';
+
+      const animer = function (b, ok) {
+        const svg = b.querySelector('svg');
+        if (!svg || !svg.animate) return;
+        if (!ok) { svg.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(-3px)' }, { transform: 'translateX(3px)' }, { transform: 'translateX(0)' }], { duration: 260 }); return; }
+        svg.animate([{ transform: 'scale(1) rotate(0)' }, { transform: 'scale(1.35) rotate(' + (b === lien ? '-12deg' : '72deg') + ')', offset: 0.45 }, { transform: 'scale(1) rotate(0)' }], { duration: 420, easing: 'cubic-bezier(.3,1.6,.5,1)' });
+      };
+      const agir = function (b, re, apres) {
+        b.disabled = true;
+        ecoMTAvecMenu(btn, function (l) { const it = l.find(function (x) { return re.test(x.textContent || ''); }); if (it) { it.click(); return true; } return false; })
+          .then(function (ok) { b.disabled = false; animer(b, !!ok); if (ok && apres) apres(); });
+      };
+      fav.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); agir(fav, /favoris/i, function () { ecoMT.fav = !ecoMT.fav; ecoMTPeindre(barre); setTimeout(function () { ecoMTLire(btn, barre, ecoMT.cle); }, 1200); }); });
+      lien.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); agir(lien, /copier/i, function () { lien.setAttribute('data-eco-mt-ok', ''); setTimeout(function () { lien.removeAttribute('data-eco-mt-ok'); }, 1200); }); });
+      barre.append(fav, lien);
+      btn.before(barre);
+    }
+
+    ecoMT.cle = cle;
+    ecoMT.fav = null;
+    ecoMTPeindre(barre);
+    setTimeout(function () { ecoMTLire(btn, barre, cle); }, 1200);
+  }
+  function ecoMTLire(btn, barre, cle) {
+    if (!btn.isConnected || ecoMT.cle !== cle) return;
+    ecoMTAvecMenu(btn, function (l) {
+      return { fav: l.some(function (x) { return /retirer des favoris/i.test(x.textContent || ''); }), extras: l.filter(function (x) { return !/favoris|copier le lien/i.test(x.textContent || ''); }).length };
+    }).then(function (r) {
+      if (!r || ecoMT.cle !== cle) return;
+      ecoMT.fav = r.fav;
+      ecoMTPeindre(barre);
+
+    });
+  }
+  setInterval(function () { if (ecoMenuTopicActif() || document.querySelector('.eco-mt, [data-eco-mt-sans]')) ecoMTPoser(); }, 800);
+
+  document.addEventListener('click', function (e) {
+    const it = e.target && e.target.closest && e.target.closest('#topic-top .dropdown-item');
+    if (!it || !/favoris/i.test(it.textContent || '')) return;
+    setTimeout(function () { try { document.dispatchEvent(new Event('eco-favoris-maj')); } catch (er) {  } }, 900);
+  }, true);
+
   const ECO_PINGS_IDB = 'nanachan-recherche-plus';
   const ECO_PINGS_AV = 'nanachan-recherche-plus-avatars';
   const ECO_PINGS_AV_DATES = 'nanachan-recherche-plus-avatars-dates';
@@ -61290,23 +64535,23 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
   let ecoPwaMinuteurs = [];
   function ecoPwaPlanifier() {
     ecoPwaMinuteurs.forEach(clearTimeout);
-    ecoPwaMinuteurs = [setTimeout(ecoPwaCouleur, 0), setTimeout(ecoPwaCouleur, 450), setTimeout(ecoMajSurLigne, 0), setTimeout(ecoMajSurLigne, 450)];
+    ecoPwaMinuteurs = [setTimeout(ecoPwaCouleur, 450), setTimeout(ecoMajSurLigne, 450)];
+    ecoApresRendu(function () { ecoPwaCouleur(); ecoMajSurLigne(); });
   }
 
   function ecoMajSurLigne() {
     const b = document.body;
     if (!b) return;
-    const sonde = document.createElement('span');
-    sonde.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden;color:var(--line-color,#550e3d)';
-    b.appendChild(sonde);
-    const c = ecoRgba(getComputedStyle(sonde).color);
-    sonde.remove();
+    ecoLireFondTheme();
+    const c = ecoLigneTheme;
     if (!c) return;
     function lumW(x) { const f = function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(x.r) + 0.7152 * f(x.g) + 0.0722 * f(x.b); }
     function texte(x) { const L = lumW(x); return (1.05 / (L + 0.05)) >= ((L + 0.05) / 0.05) ? '#fff' : '#111'; }
     const h = document.documentElement.style;
-    h.setProperty('--eco-sur-ligne', texte(c));
-    h.setProperty('--eco-sur-ligne-clair', texte({ r: c.r * 0.62, g: c.g * 0.62, b: c.b * 0.62 }));
+
+    const a = texte(c), b2 = texte({ r: c.r * 0.62, g: c.g * 0.62, b: c.b * 0.62 });
+    if (h.getPropertyValue('--eco-sur-ligne') !== a) h.setProperty('--eco-sur-ligne', a);
+    if (h.getPropertyValue('--eco-sur-ligne-clair') !== b2) h.setProperty('--eco-sur-ligne-clair', b2);
   }
   let ecoPwaBadgeVu = null;
   function ecoPwaBadge() {
@@ -61342,7 +64587,7 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
     }).observe(document.head || h, { childList: true, subtree: true, characterData: true });
     ['tp-theme-affiche', 'tp-donnees-changees'].forEach(function (ev) { document.addEventListener(ev, ecoPwaPlanifier); });
 
-    [0, 800, 2500, 6000].forEach(function (ms) { setTimeout(ecoPwaCouleur, ms); setTimeout(ecoMajSurLigne, ms); });
+    [800, 2500, 6000].forEach(function (ms) { setTimeout(function () { ecoPwaCouleur(); ecoMajSurLigne(); }, ms); });
     ecoPwaBadge();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ecoPwaDemarrer, { once: true });
@@ -61458,6 +64703,119 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
     }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class'] });
   }
 
+  const ECO_PORTE = { id: 'porte', nom: 'Porte des pages', version: '1', page: true, code: function (window) {
+    if (window.__ecoPorte) return;
+    const RE = /\/nanachannel\/topics\/\d+\/posts\/?$/;
+    const CLE = 'eco-porte-posts', FEN = 60000, LIMITE = 20;
+    const PLAFOND = { site: LIMITE, eco: LIMITE - 6, fond: LIMITE - 10 };
+    function chemin(u) { try { const x = new URL(String(u), location.href); return x.origin === location.origin ? x : null; } catch (e) { return null; } }
+    function estPosts(u) { const x = chemin(u); return !!x && RE.test(x.pathname); }
+    function lire() {
+      let o = null;
+      try { o = JSON.parse(localStorage.getItem(CLE) || 'null'); } catch (e) { o = null; }
+      if (!o || !Array.isArray(o.t)) o = { t: [], b: 0 };
+      const lim = Date.now() - FEN;
+      o.t = o.t.filter(function (x) { return x > lim; }).slice(-60);
+      return o;
+    }
+    function ecrire(o) { try { localStorage.setItem(CLE, JSON.stringify(o)); } catch (e) {  } }
+    function noter() { const o = lire(); o.t.push(Date.now()); ecrire(o); }
+    function bloquer() { const o = lire(); o.b = Date.now() + FEN; o.k = (Array.isArray(o.k) ? o.k : []).concat(Date.now()).slice(-10); ecrire(o); avertir(); }
+
+    function attente(prio) {
+      const o = lire(), n = Date.now();
+      if (o.b > n) return o.b - n;
+      const p = PLAFOND[prio] || PLAFOND.eco;
+      if (o.t.length < p) return 0;
+      return Math.max(50, o.t[o.t.length - p] + FEN - n);
+    }
+    function quandLibre(prio) {
+      return new Promise(function (ok) {
+        (function essai() {
+          const a = attente(prio);
+          if (!a) { noter(); ok(); return; }
+          setTimeout(essai, Math.min(a, 3000) + 30);
+        })();
+      });
+    }
+
+    let boite = null, tic = null;
+    function avertir() {
+      if (!document.body) return;
+      if (!boite || !boite.isConnected) {
+        boite = document.createElement('div');
+        boite.setAttribute('data-eco-ui', '');
+        boite.setAttribute('data-eco-porte', '');
+        boite.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:2147483000;max-width:min(420px,calc(100vw - 24px));padding:8px 12px;border-radius:8px;font:13px/1.35 system-ui,sans-serif;color:#fff;background:rgba(30,30,34,.94);border-left:3px solid #E5C07B;pointer-events:none';
+        document.body.appendChild(boite);
+      }
+      clearInterval(tic);
+      (function maj() {
+        const r = Math.ceil((lire().b - Date.now()) / 1000);
+        if (r <= 0) { clearInterval(tic); if (boite) boite.remove(); boite = null; return; }
+        const t = '⏳ Le forum limite la lecture des pages (trop de pages lues en une minute). Reprise dans ' + r + ' s.';
+        if (boite.textContent !== t) boite.textContent = t;
+      })();
+      tic = setInterval(function () {
+        const r = Math.ceil((lire().b - Date.now()) / 1000);
+        if (r <= 0 || !boite) { clearInterval(tic); if (boite) boite.remove(); boite = null; return; }
+        boite.textContent = '⏳ Le forum limite la lecture des pages (trop de pages lues en une minute). Reprise dans ' + r + ' s.';
+      }, 1000);
+    }
+    const cache = new Map();
+    const fetch0 = window.fetch;
+    window.fetch = function (entree, init) {
+      let u = null, m = 'GET';
+      try {
+        u = typeof entree === 'string' ? entree : (entree && entree.url) || String(entree);
+        m = String((init && init.method) || (entree && entree.method) || 'GET').toUpperCase();
+      } catch (e) { u = null; }
+      if (m !== 'GET' || !u || !estPosts(u)) return fetch0.apply(this, arguments);
+      const prio = (init && init.eco) || 'eco';
+      const duree = +(init && init.ecoCache) || 0;
+      const cle = chemin(u).href;
+      const c = duree && cache.get(cle);
+      const rep = function (t) { return new Response(t, { status: 200, headers: { 'Content-Type': 'application/json' } }); };
+      if (c && Date.now() - c.t < duree) return c.p.then(rep);
+      const soi = this, args = arguments;
+      const req = quandLibre(prio).then(function () { return fetch0.apply(soi, args); }).then(function (r) {
+        if (r.status === 429) bloquer();
+        return r;
+      });
+      if (duree) {
+        const pt = req.then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.clone().text(); });
+        cache.set(cle, { t: Date.now(), p: pt });
+        pt.catch(function () { if (cache.get(cle) && cache.get(cle).p === pt) cache.delete(cle); });
+        if (cache.size > 300) cache.delete(cache.keys().next().value);
+      }
+      return req;
+    };
+    const XP = window.XMLHttpRequest && window.XMLHttpRequest.prototype;
+    if (XP) {
+      const open0 = XP.open, send0 = XP.send;
+      XP.open = function (methode, url) {
+        this._ecoPorte = String(methode).toUpperCase() === 'GET' && estPosts(url);
+        if (this._ecoPorte && !this._ecoPorteEcoute) {
+          this._ecoPorteEcoute = true;
+          this.addEventListener('loadend', function () { if (this.status === 429) bloquer(); });
+        }
+        return open0.apply(this, arguments);
+      };
+      XP.send = function () {
+        if (!this._ecoPorte) return send0.apply(this, arguments);
+        const xhr = this, args = arguments;
+        const o = lire();
+        if (!(o.b > Date.now())) { noter(); return send0.apply(xhr, args); }
+        avertir();
+        quandLibre('site').then(function () { try { send0.apply(xhr, args); } catch (e) {  } });
+        return undefined;
+      };
+    }
+    window.__ecoPorte = { attente: attente };
+  } };
+  ecoActifsAuChargement.porte = true;
+  ecoLancerModule(ECO_PORTE);
+
   ECO_MODULES.filter(function (m) { return m.debut === 'start'; }).forEach(ecoLancerModule);
   function ecoQuandPret(f) {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', f, { once: true });
@@ -61466,13 +64824,15 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
   ecoQuandPret(function () {
     ECO_MODULES.filter(function (m) { return m.debut !== 'start'; }).forEach(ecoLancerModule);
     ecoUIHelper();
-    ecoDemarrerApparence();
+
+    ecoApresRendu(ecoCouleursApresRendu);
     ecoDemarrerHalos();
   });
 
   function ecoUIHelper() {
     const MODULES = ECO_MODULES.slice().sort(function (a, b) { return a.nom.localeCompare(b.nom, 'fr', { sensitivity: 'base' }); });
     const ONGLETS = [
+      { id: 'favoris', nom: '★', titre: 'Paramètres favoris : tes réglages épinglés (☆ dans les réglages d\'un module)' },
       { id: 'modules', nom: 'Modules' },
       { id: 'styles', nom: 'Styles' },
       { id: 'tweaks', nom: 'Tweaks', titre: 'Tweaks et correctifs' },
@@ -61572,6 +64932,34 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
       '.eco-ligne-txt{flex:1;min-width:0}',
       '.eco-nom{font-weight:600}',
       '.eco-nom small{font-weight:400;opacity:.5;margin-left:5px;font-size:11px}',
+
+      '.eco-conso{display:inline-block;margin-left:6px;padding:0 5px;border-radius:6px;font-size:10px;font-weight:600;line-height:15px;vertical-align:1px;cursor:help;border:1px solid currentColor;opacity:.85}',
+      '.eco-tiroir [data-eco-conso="léger"]{color:#3fb950!important}.eco-tiroir [data-eco-conso="moyen"]{color:#d29922!important}.eco-tiroir [data-eco-conso="élevé"]{color:#f85149!important}',
+      '.eco-conso[data-eco-conso="léger"]{border:none;padding:0;font-size:9px;vertical-align:2px}',
+
+      '[data-eco-epingle-btn]{all:unset!important;cursor:pointer!important;display:inline-block!important;margin:0 5px!important;font-size:13px!important;line-height:1!important;opacity:.3!important;color:inherit!important;vertical-align:baseline!important}',
+      '[data-eco-epingle-btn]:hover,[data-eco-epingle-btn][aria-pressed=true]{opacity:1!important}',
+      '[data-eco-epingle-btn][aria-pressed=true]{color:#e3b341!important}',
+      '@media (pointer:coarse){[data-eco-epingle-btn]{opacity:.6!important;padding:4px!important;margin:-4px 2px!important}}',
+      '[data-eco-fav-hote] :not([data-eco-epingle]):not([data-eco-epingle-chemin]):not([data-eco-epingle] *){display:none!important}',
+      '[data-eco-fav-hote] [data-eco-plie][data-eco-epingle-chemin],[data-eco-fav-hote] [data-eco-plie][data-eco-epingle]{display:revert!important}',
+      '.eco-fav-module{all:unset;cursor:pointer;display:block;margin:10px 0 2px;font-weight:600;font-size:13px;opacity:.85}.eco-fav-module:hover{opacity:1;text-decoration:underline}',
+      '.eco-fav-intro{margin-bottom:4px}',
+      '.eco-fav-manque{font-size:12px;opacity:.6;display:grid;gap:3px;margin:2px 0}.eco-fav-manque .eco-btn{padding:0 6px;margin-left:4px}',
+      '.eco-mod-barre{position:relative;display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 8px}',
+      '.eco-mod-choix{position:absolute;top:100%;right:0;z-index:5;display:flex;flex-direction:column;gap:2px;padding:4px;margin-top:2px;border-radius:8px;background:var(--dropdown-menu-bg,#1e1f23);border:1px solid var(--dropdown-menu-border,#3a3b41)}',
+      '.eco-mod-choix button{all:unset;cursor:pointer;padding:6px 10px;border-radius:6px;font-size:13px;white-space:nowrap}',
+      '.eco-mod-choix button:hover{background:var(--dropdown-item-hover,rgba(255,255,255,.08))}.eco-mod-choix button:disabled{opacity:.4;cursor:default}',
+      '.eco-mod-confirm,.eco-mod-attente{margin:0 0 8px;padding:8px 10px;border-radius:8px;border:1px solid color-mix(in srgb,currentColor 25%,transparent);font-size:13px}',
+      '.eco-mod-attente{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.eco-mod-attente span{flex:1 1 180px}',
+      '.eco-mod-actions{display:flex;gap:6px;margin-top:6px}',
+      '[data-eco-conso-pause]{opacity:.45!important;filter:grayscale(1)}',
+      '.eco-conso-bloc{margin:2px 0 8px;padding:6px 8px;border:1px solid color-mix(in srgb,currentColor 18%,transparent);border-radius:8px}',
+      '.eco-conso-tete{font-weight:600;font-size:13px;margin-bottom:2px}',
+      '.eco-conso-liste{display:grid;gap:3px;margin-top:6px}',
+      '.eco-conso-ligne{display:grid;grid-template-columns:minmax(90px,auto) 1fr auto;gap:8px;align-items:center;font-size:12px;cursor:help}',
+      '.eco-conso-ligne small{opacity:.6;font-size:11px;white-space:nowrap}',
+      '.eco-conso-barre{height:6px;border-radius:3px;background:currentColor;transform-origin:0 50%;transform:scaleX(var(--eco-conso-p,0))}',
       '.eco-nom .eco-alerte{color:#e5534b;margin-left:5px;cursor:help}',
       '.eco-desc{font-size:12px;opacity:.6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
       '.eco-desc-long{white-space:normal;overflow:visible}',
@@ -61581,7 +64969,7 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
       '[data-eco-section]:hover{opacity:.85}',
       '[data-eco-plie]{display:none!important}',
 
-      ':where(:is(' + ECO_FENETRES + ',[data-eco-racine],[data-rp-barre-favoris],[data-rp-barre],[data-vp-barre]),:is(' + ECO_FENETRES + ',[data-eco-racine],[data-rp-barre-favoris],[data-rp-barre],[data-vp-barre]) *){scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--text-color,#888) 40%,transparent) transparent}',
+      '@layer eco-bas{' + (ECO_FENETRES + ',[data-eco-racine],[data-rp-barre-favoris],[data-vp-barre]').split(',').map(function (x) { return x + ',' + x + ' *'; }).join(',') + '{scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--text-color,#888) 40%,transparent) transparent}}',
 
       '.eco-tweaks-section[data-eco-section]::before{content:none}',
       '.eco-tweaks-section[data-eco-section] h3::before{content:"▸";display:inline-block;width:1.1em;opacity:.7;transition:transform .15s}',
@@ -61600,7 +64988,7 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
       '.eco-ecritos > .eco-ecrit[data-eco-actif]{opacity:1;transform:none;pointer-events:auto}',
       '@media (prefers-reduced-motion:reduce){.eco-ecritos > .eco-ecrit{transition:none;transform:none}}',
 
-      ':where(html[data-eco-defile] #app *, html[data-eco-defile] body > *){scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--text-color,#888) 35%,transparent) transparent}',
+      '@layer eco-bas{html[data-eco-defile] #app,html[data-eco-defile] body > *{scrollbar-color:color-mix(in srgb,var(--text-color,#888) 35%,transparent) transparent}html[data-eco-defile] #app *,html[data-eco-defile] body > *{scrollbar-width:thin}}',
       'html[data-eco-pwa][data-eco-defile]{scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--line-color,#550e3d) 55%,transparent) transparent}',
       'html[data-eco-pwa][data-eco-defile]::-webkit-scrollbar{width:8px;height:8px;background:transparent}',
       'html[data-eco-pwa][data-eco-defile]::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--line-color,#550e3d) 55%,transparent);border-radius:8px;border:2px solid transparent;background-clip:padding-box}',
@@ -61640,6 +65028,25 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
       'html:not([data-eco-sans-fix-rika]) #app .rika-img{width:201px!important;height:auto!important;max-width:none!important;transform:none!important;position:static!important;image-rendering:pixelated}',
       'html:not([data-eco-sans-fix-rika]) #app .hero-text-col > .bouton-truc{order:5;width:auto!important;align-self:center!important;align-items:center!important;margin:22px 0 4px!important}',
       'html:not([data-eco-sans-fix-rika]) #app .bouton-truc .forum-button{width:auto!important;min-width:220px;padding-left:28px;padding-right:28px;box-sizing:border-box}',
+
+      'html:not([data-eco-sans-fix-banniere]) .event-banner-track{animation:eco-banniere var(--eco-bn-dur,18s) linear infinite!important}',
+      'html:not([data-eco-sans-fix-banniere]) .event-banner-group{flex:0 0 auto!important;white-space:nowrap}',
+      '@keyframes eco-banniere{from{transform:translateX(0)}to{transform:translateX(-50%)}}',
+      '@keyframes eco-banniere-site{from{transform:translateX(0)}to{transform:translateX(-100%)}}',
+
+      '.event-banner[data-eco-bn-apercu]{margin:20px 15px 0;background-color:var(--nana-background-color);overflow:hidden;white-space:nowrap;cursor:pointer;border-radius:6px;display:flex;align-items:stretch;box-sizing:border-box;width:100%;min-width:0}',
+      '@media (min-width:768px){.event-banner[data-eco-bn-apercu]{width:98%}}@media (max-width:768px){.event-banner[data-eco-bn-apercu]{margin-left:0}}',
+      '.event-banner[data-eco-bn-apercu] .event-banner-label{flex:none;display:inline-flex;align-items:center;background-color:var(--line-color);color:#fff;font-weight:700;font-size:12px;letter-spacing:.06em;padding:0 12px;position:relative;z-index:1}',
+      'html[data-theme=lemon] .event-banner[data-eco-bn-apercu] .event-banner-label{color:#000}',
+      '.event-banner[data-eco-bn-apercu] .event-banner-track{display:inline-flex;align-items:center;padding:6px 0;will-change:transform;animation:eco-banniere-site 18s linear infinite}',
+      '.event-banner[data-eco-bn-apercu] .event-banner-text{padding:0 32px;font-weight:700;color:var(--text-color)}',
+
+      '@media (prefers-reduced-motion:reduce){html .event-banner-track{animation:none!important}}',
+      '.eco-fix-apercu-rang{display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap}',
+      '.eco-fix-apercu{flex:none}',
+      '.eco-fix-apercu-texte{flex:1 1 160px;min-width:0;box-sizing:border-box;height:28px;padding:0 8px;border-radius:6px;font:inherit;font-size:12px;color:inherit;' +
+        'background:var(--dropdown-item-hover,rgba(127,127,127,.12));border:1px solid var(--dropdown-menu-border,rgba(127,127,127,.35))}',
+      '.eco-fix-apercu-texte:focus{outline:none;border-color:currentColor}',
       '@container eco-accueil (min-width:520px){html:not([data-eco-sans-fix-rika]) #app .rika-img{width:402px!important}}',
       '@container eco-accueil (max-width:599px){html:not([data-eco-sans-fix-rika]) #app .hero-row{padding-left:14px!important;padding-right:14px!important}html:not([data-eco-sans-fix-rika]) #app .welcome-text{text-align:left!important}}',
 
@@ -61908,7 +65315,175 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
 
     let vueModule = null;
     let hoteActif = null;
+    let hotesFavoris = [], zonesEpingles = [];
+
+    const EP_LIGNES = '.eco-form-ligne, .eco-ligne, .lp-mligne, .sbp-ligne, .sbp-case, label';
+    const EP_CTRL = 'input:not([type=hidden]):not([data-eco-case-cachee]), select, textarea, .eco-inter, .eco-segments, [role=switch]';
+    function epingles() {
+      if (!Array.isArray(ecoReglages.epingles)) ecoReglages.epingles = [];
+      return ecoReglages.epingles;
+    }
+    function nomDeLigne(l) {
+      const w = document.createTreeWalker(l, NodeFilter.SHOW_TEXT);
+      for (let n = w.nextNode(); n; n = w.nextNode()) {
+        const p = n.parentElement;
+        if (!p || p.closest('[data-eco-epingle-btn], select, option, .eco-segments, .eco-inter, button, textarea')) continue;
+        const t = n.nodeValue.replace(/\s+/g, ' ').trim();
+        if (/[A-Za-zÀ-ÿ]{2}/.test(t)) return { noeud: n, nom: t.slice(0, 60) };
+      }
+      return null;
+    }
+    function lignesReglages(zone) {
+      const res = [], compte = {};
+      zone.querySelectorAll(EP_CTRL).forEach(function (c) {
+        if (c.closest('[data-eco-epingle-btn]') || (c.closest('.eco-segments') && !c.matches('.eco-segments'))) return;
+        let l = null;
+        if (c.matches('input[type=radio]') && c.name) {
+
+          const tous = Array.prototype.slice.call(zone.querySelectorAll('input[type=radio]')).filter(function (x) { return x.name === c.name; });
+          l = c.parentElement;
+          while (l && l !== zone && !tous.every(function (x) { return l.contains(x); })) l = l.parentElement;
+        } else l = c.closest(EP_LIGNES);
+        if (!l || l === zone || !zone.contains(l)) l = c.parentElement;
+        if (!l || l === zone || res.some(function (r) { return r.el === l || r.el.contains(l) || l.contains(r.el); })) return;
+        const t = nomDeLigne(l);
+        if (!t) return;
+        const n = compte[t.nom] = (compte[t.nom] || 0) + 1;
+        res.push({ el: l, txt: t.noeud, cle: t.nom + (n > 1 ? '#' + n : ''), nom: t.nom });
+      });
+      return res;
+    }
+    function basculerEpingle(k) {
+      const ep = epingles();
+      const i = ep.indexOf(k);
+      if (i === -1) ep.push(k); else ep.splice(i, 1);
+      ecoEcrire(ecoReglages);
+      if (ecoReglages.onglet === 'favoris' && i !== -1) { dessiner(); return; }
+      zonesEpingles.forEach(function (z) { decorerEpingles(z); });
+    }
+    function decorerEpingles(zone) {
+      const id = zone._ecoEpId, ep = epingles(), fav = zone.hasAttribute('data-eco-fav-hote');
+      const vues = [];
+      lignesReglages(zone).forEach(function (L) {
+        const k = id + '|' + L.cle, on = ep.indexOf(k) !== -1;
+        let b = L.el._ecoEpBtn;
+        if (!b || !L.el.contains(b)) {
+          b = document.createElement('button');
+          b.type = 'button';
+          b.setAttribute('data-eco-epingle-btn', '');
+          b.setAttribute('data-eco-sans-teinte', '');
+          b.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); basculerEpingle(b._cle); });
+          L.txt.after(b);
+          L.el._ecoEpBtn = b;
+        }
+        b._cle = k;
+        if (b.getAttribute('aria-pressed') !== String(on)) {
+          b.setAttribute('aria-pressed', String(on));
+          b.textContent = on ? '★' : '☆';
+          b.title = on ? 'Retirer des paramètres favoris (onglet ★)' : 'Épingler dans les paramètres favoris (onglet ★)';
+        }
+        if (fav && on) vues.push({ el: L.el, k: k });
+      });
+      if (!fav) return;
+
+      zone.querySelectorAll('[data-eco-epingle],[data-eco-epingle-chemin]').forEach(function (x) {
+        if (!vues.some(function (v) { return v.el === x; })) x.removeAttribute('data-eco-epingle');
+        x.removeAttribute('data-eco-epingle-chemin');
+      });
+      vues.forEach(function (v) {
+        if (!v.el.hasAttribute('data-eco-epingle')) v.el.setAttribute('data-eco-epingle', '');
+        for (let a = v.el.parentElement; a && a !== zone; a = a.parentElement) {
+          a.setAttribute('data-eco-epingle-chemin', '');
+          if (a.style.display === 'none' || a.hasAttribute('hidden')) a.style.setProperty('display', 'block', 'important');
+        }
+      });
+
+      const manque = epingles().filter(function (k) { return k.split('|')[0] === id && !vues.some(function (v) { return v.k === k; }); });
+      let m = zone._ecoEpManque;
+      if (!manque.length) { if (m) { m.remove(); zone._ecoEpManque = null; } return; }
+      if (!m) { m = document.createElement('div'); m.className = 'eco-fav-manque'; zone.after(m); zone._ecoEpManque = m; }
+      m.textContent = '';
+      manque.forEach(function (k) {
+        const d = document.createElement('div');
+        d.textContent = 'Introuvable pour l\'instant : ' + k.slice(id.length + 1) + ' ';
+        const x = document.createElement('button');
+        x.type = 'button'; x.className = 'eco-btn'; x.textContent = '✕';
+        x.title = 'Désépingler';
+        x.addEventListener('click', function () { basculerEpingle(k); });
+        d.appendChild(x);
+        m.appendChild(d);
+      });
+    }
+    function suivreEpingles(zone, id) {
+      zone._ecoEpId = id;
+      zonesEpingles.push(zone);
+      let prevu = false;
+      const passe = function () { prevu = false; if (zone.isConnected) decorerEpingles(zone); };
+      zone._ecoEpObs = new MutationObserver(function (ms) {
+        if (prevu) return;
+
+        if (ms.every(function (x) { return x.type === 'attributes' || Array.prototype.every.call(x.addedNodes, function (n) { return n.nodeType === 1 && n.hasAttribute('data-eco-epingle-btn'); }) && !x.removedNodes.length; })) return;
+        prevu = true; requestAnimationFrame(passe);
+      });
+      zone._ecoEpObs.observe(zone, { childList: true, subtree: true });
+      passe();
+    }
+    function dessinerFavoris() {
+      const ep = epingles();
+      const intro = document.createElement('div');
+      intro.className = 'eco-desc eco-desc-long eco-fav-intro';
+      intro.textContent = ep.length ? 'Tes réglages épinglés, utilisables ici. ★ : désépingler. Titre du module : tous ses réglages.'
+        : 'Aucun réglage épinglé. Dans les réglages d\'un module (onglet Modules → un module), touche le ☆ au bout du nom d\'un réglage : il apparaîtra ici, utilisable directement.';
+      corps.appendChild(intro);
+      MODULES.forEach(function (m) {
+        if (!ep.some(function (k) { return k.split('|')[0] === m.id; })) return;
+        const tete = document.createElement('button');
+        tete.type = 'button';
+        tete.className = 'eco-fav-module';
+        tete.textContent = m.nom + ' ›';
+        tete.title = 'Tous les réglages de ' + m.nom;
+        tete.addEventListener('click', function () { ecoReglages.onglet = 'modules'; vueModule = m.id; ecoEcrire(ecoReglages); dessiner(); });
+        corps.appendChild(tete);
+        const hote = document.createElement('div');
+        hote.className = 'eco-hote';
+        hote.setAttribute('data-eco-fav-hote', '');
+        if (m.schema) {
+          corps.appendChild(hote);
+          dessinerSchema(m, hote);
+        } else if (!ecoActifsAuChargement[m.id] || m.etat === 'erreur' || !m.reglages) {
+          corps.appendChild(message(!ecoActifsAuChargement[m.id] ? 'Module désactivé : active-le et recharge la page.' : 'Réglages indisponibles (module planté ?).'));
+          return;
+        } else {
+          hote.setAttribute('data-eco-hote', m.id);
+          corps.appendChild(hote);
+          hotesFavoris.push(hote);
+          const essais = [];
+          hote._ecoObs = new MutationObserver(function () {
+            if (hote.childElementCount || !hote.isConnected) return;
+            requestAnimationFrame(function () {
+              if (hote.childElementCount || !hote.isConnected || hotesFavoris.indexOf(hote) === -1) return;
+              const t = Date.now();
+              while (essais.length && t - essais[0] > 5000) essais.shift();
+              if (essais.length >= 8) return;
+              essais.push(t);
+              demanderReglages(m, hote);
+            });
+          });
+          hote._ecoObs.observe(hote, { childList: true });
+          habillerCases(hote);
+          demanderReglages(m, hote);
+        }
+        suivreEpingles(hote, m.id);
+      });
+    }
+
     function fermerVueModule() {
+      zonesEpingles.forEach(function (z) { if (z._ecoEpObs) z._ecoEpObs.disconnect(); });
+      zonesEpingles = [];
+      hotesFavoris.splice(0).forEach(function (h) {
+        if (h._ecoObs) h._ecoObs.disconnect();
+        try { h.dispatchEvent(new Event('eco-reglages-fermer')); } catch (e) {  }
+      });
       if (!hoteActif) return;
       const h = hoteActif;
       hoteActif = null;
@@ -62139,6 +65714,142 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
       majDependances();
     }
 
+    const ECO_DEPENDANCES = { shitbox: { notifications: 'mes topics en favoris' }, fil: { notifications: 'alertes des blogs suivis' } };
+    let modulesAvant = null;
+    let confirmCoupe = null;
+    function changerModules(ids, actif) {
+      if (!modulesAvant) modulesAvant = Object.assign({}, ecoReglages.modules);
+      ids.forEach(function (id) {
+        if ((ecoReglages.modules[id] !== false) === actif) return;
+        ecoReglages.modules[id] = actif;
+        if (actif) { if (!ecoReglages.activesLe || typeof ecoReglages.activesLe !== 'object') ecoReglages.activesLe = {}; ecoReglages.activesLe[id] = Date.now(); }
+      });
+      ecoEcrire(ecoReglages);
+    }
+    function avertissementDependances(coupes) {
+      const restent = MODULES.filter(function (m) { return coupes.indexOf(m.id) === -1 && ecoReglages.modules[m.id] !== false; });
+      const l = [];
+      restent.forEach(function (m) {
+        const d = ECO_DEPENDANCES[m.id];
+        if (!d) return;
+        Object.keys(d).forEach(function (id) {
+          if (coupes.indexOf(id) === -1) return;
+          const dep = MODULES.filter(function (x) { return x.id === id; })[0];
+          l.push(m.nom + ' : ' + d[id] + ' (utilise ' + (dep ? dep.nom : id) + ')');
+        });
+      });
+      return l.length ? 'Ces fonctions s\'arrêteront : ' + l.join(' ; ') + '.' : '';
+    }
+    function dessinerBarreModules() {
+      const barre = document.createElement('div');
+      barre.className = 'eco-mod-barre';
+      function bouton(txt, titre, f) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'eco-btn';
+        b.textContent = txt;
+        b.title = titre;
+        b.addEventListener('click', f);
+        barre.appendChild(b);
+        return b;
+      }
+      bouton('Tout activer', 'Activer tous les modules (au prochain chargement)', function () {
+        confirmCoupe = null; changerModules(MODULES.map(function (m) { return m.id; }), true); dessiner();
+      });
+      bouton('Tout désactiver', 'Désactiver tous les modules (au prochain chargement)', function () {
+        confirmCoupe = null; changerModules(MODULES.map(function (m) { return m.id; }), false); dessiner();
+      });
+      const conso = ecoConsoTout();
+      const couper = bouton('Couper… ▾', 'Couper les modules qui consomment le plus sur cette page' + (ECO_CONSO.on ? '' : ' (mesure en pause : chiffres figés)'), function (e) {
+        e.stopPropagation();
+        const ouvert = barre.querySelector('.eco-mod-choix');
+        if (ouvert) { ouvert.remove(); return; }
+        const ch = document.createElement('div');
+        ch.className = 'eco-mod-choix';
+        [['les élevés', ['élevé']], ['les élevés et moyens', ['élevé', 'moyen']]].forEach(function (o) {
+          const b = document.createElement('button');
+          b.type = 'button';
+          const n = conso.filter(function (c) { return o[1].indexOf(c.niveau) !== -1; }).length;
+          b.textContent = 'Couper ' + o[0] + ' (' + n + ')';
+          b.disabled = !n;
+          b.addEventListener('click', function () { confirmCoupe = { niveaux: o[1] }; dessiner(); });
+          ch.appendChild(b);
+        });
+        barre.appendChild(ch);
+      });
+      couper.disabled = !conso.length;
+      corps.appendChild(barre);
+
+      if (confirmCoupe) {
+        const cibles = conso.filter(function (c) { return confirmCoupe.niveaux.indexOf(c.niveau) !== -1 && ecoReglages.modules[c.id] !== false; });
+        const box = document.createElement('div');
+        box.className = 'eco-mod-confirm';
+        const t = document.createElement('div');
+        t.textContent = cibles.length ? 'Couper ' + cibles.map(function (c) { return c.nom + ' (' + c.niveau + ')'; }).join(', ') + ' ?' : 'Aucun module à couper.';
+        box.appendChild(t);
+        const n = document.createElement('div');
+        n.className = 'eco-desc eco-desc-long';
+        n.textContent = 'Mesuré sur cette page : un module peut consommer beaucoup sur un gros topic et presque rien ailleurs. ' + avertissementDependances(cibles.map(function (c) { return c.id; }));
+        box.appendChild(n);
+        const ac = document.createElement('div');
+        ac.className = 'eco-mod-actions';
+        const ok = document.createElement('button');
+        ok.type = 'button'; ok.className = 'eco-btn eco-btn-danger'; ok.textContent = 'Couper'; ok.disabled = !cibles.length;
+        ok.addEventListener('click', function () { changerModules(cibles.map(function (c) { return c.id; }), false); confirmCoupe = null; dessiner(); });
+        const non = document.createElement('button');
+        non.type = 'button'; non.className = 'eco-btn'; non.textContent = 'Annuler';
+        non.addEventListener('click', function () { confirmCoupe = null; dessiner(); });
+        ac.append(ok, non);
+        box.appendChild(ac);
+        corps.appendChild(box);
+      }
+
+      const enAttente = MODULES.filter(function (m) { return (ecoReglages.modules[m.id] !== false) !== !!ecoActifsAuChargement[m.id]; });
+      if (enAttente.length) {
+        const b = document.createElement('div');
+        b.className = 'eco-mod-attente';
+        const t = document.createElement('span');
+        t.textContent = enAttente.length + ' module' + (enAttente.length > 1 ? 's changés' : ' changé') + ' : recharge la page pour appliquer.';
+        const r = document.createElement('button');
+        r.type = 'button'; r.className = 'eco-btn'; r.textContent = '↻ Recharger';
+        r.addEventListener('click', function () { location.reload(); });
+        b.append(t, r);
+        if (modulesAvant) {
+          const a = document.createElement('button');
+          a.type = 'button'; a.className = 'eco-btn'; a.textContent = 'Annuler';
+          a.title = 'Remettre les interrupteurs comme avant le dernier changement groupé';
+          a.addEventListener('click', function () { ecoReglages.modules = modulesAvant; modulesAvant = null; ecoEcrire(ecoReglages); dessiner(); });
+          b.appendChild(a);
+        }
+        corps.appendChild(b);
+      } else modulesAvant = null;
+
+      const ligne = document.createElement('div');
+      ligne.className = 'eco-ligne';
+      const txt = document.createElement('div');
+      txt.className = 'eco-ligne-txt';
+      const nom = document.createElement('div');
+      nom.className = 'eco-nom';
+      nom.textContent = 'Mesurer la consommation';
+      const voulu = ECO_CONSO.on;
+      const note = document.createElement('div');
+      note.className = 'eco-desc eco-desc-long';
+      note.textContent = 'Temps pris par chaque module (pastilles, bloc ci-dessous, rapport de débogage). Coût négligeable. En pause : chiffres figés et grisés, reprise à la réactivation.';
+      txt.append(nom, note);
+      const inter = document.createElement('button');
+      inter.type = 'button';
+      inter.className = 'eco-inter';
+      inter.setAttribute('role', 'switch');
+      inter.setAttribute('aria-checked', String(voulu));
+      inter.addEventListener('click', function () {
+        ecoReglages.mesure = !voulu; if (ecoReglages.mesure) delete ecoReglages.mesure;
+        ecoEcrire(ecoReglages);
+        ecoConsoRegler(!voulu);
+        dessiner();
+      });
+      ligne.append(txt, inter);
+      corps.appendChild(ligne);
+    }
     function dessinerVueModule(m) {
       const tete = document.createElement('div');
       tete.className = 'eco-vue-tete';
@@ -62161,8 +65872,11 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
       corps.appendChild(tete);
       if (m.schema) {
         if (!ecoActifsAuChargement[m.id]) corps.appendChild(message('Module désactivé : ses réglages seront utilisés quand tu le réactiveras.'));
-        dessinerSchema(m, corps);
+        const zone = document.createElement('div');
+        corps.appendChild(zone);
+        dessinerSchema(m, zone);
         suivrePliage(corps, m.id);
+        suivreEpingles(zone, m.id);
         return;
       }
 
@@ -62201,6 +65915,7 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
       demanderReglages(m, hote);
       if (!hote.childElementCount) hote.appendChild(message('Le module n\'a pas répondu (recharge la page).'));
       requestAnimationFrame(function () { if (hote.isConnected) suivrePliage(hote, m.id); });
+      suivreEpingles(hote, m.id);
     }
 
     function habillerCases(hote) {
@@ -62800,6 +66515,10 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
       { id: 'drapeauxPays', groupe: 'page', nom: 'Drapeaux dans le choix du pays',
         desc: 'Mon compte → Pays : le drapeau de chaque pays à gauche de son nom (liste à la place de celle du forum ; lettre tapée = pays suivant qui commence par elle). Le pays n\'est enregistré qu\'avec « Mettre à jour », comme avant.',
         appliquer: function () { ecoDrapPoser(); } },
+
+      { id: 'menuTopic', groupe: 'page', nom: 'Favoris et lien à côté du ⋮ (haut d\'un topic)',
+        desc: 'En haut d\'un topic, une étoile (ajouter / retirer des favoris, jaune quand le topic y est) et une chaîne (copier le lien), sur la même ligne que le ⋮. Ils passent par le menu du forum : même effet.',
+        appliquer: function () { ecoMT.cle = ''; ecoMTPoser(); } },
       { id: 'sansFab', groupe: 'page', nom: 'Masquer le bouton ✎ du forum',
         desc: 'Bouton rond ✎ du forum en fenêtre étroite (il gêne les flèches de Navigation+ et la pastille de Messages+).',
         appliquer: function () { ecoAppliquerSansFab(); } },
@@ -62959,6 +66678,37 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
           try { document.dispatchEvent(new CustomEvent('eco-fix-change', { detail: f.id })); } catch (x) {  }
           dessiner();
         });
+        if (f.id === 'banniere') {
+          const ap = document.createElement('button');
+          ap.type = 'button';
+          ap.className = 'eco-btn eco-fix-apercu';
+          ap.textContent = document.querySelector('[data-eco-bn-apercu]') ? 'Fermer l\'aperçu' : 'Aperçu';
+          ap.title = 'Affiche une bannière d\'essai en haut de la page (clic sur la bannière ou ici : fermer)';
+          ap.addEventListener('click', function () { ap.textContent = ecoBanniereApercu() ? 'Fermer l\'aperçu' : 'Aperçu'; });
+
+          const rang = document.createElement('div');
+          rang.className = 'eco-fix-apercu-rang';
+          const champ = document.createElement('input');
+          champ.type = 'text';
+          champ.className = 'eco-fix-apercu-texte';
+          champ.maxLength = 120;
+          champ.placeholder = 'Aperçu de la bannière';
+          champ.setAttribute('aria-label', 'Texte de la bannière d\'essai');
+          champ.title = 'Texte de la bannière d\'essai (vide : « Aperçu de la bannière »)';
+          champ.value = typeof ecoReglages.tweaks.banniereTexte === 'string' ? ecoReglages.tweaks.banniereTexte : '';
+          let attente = 0;
+          champ.addEventListener('input', function () {
+            ecoReglages.tweaks.banniereTexte = champ.value;
+            ecoBanniereTexteMaj();
+            clearTimeout(attente);
+            attente = setTimeout(function () { ecoEcrire(ecoReglages); }, 400);
+          });
+          champ.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); if (!document.querySelector('[data-eco-bn-apercu]')) ap.click(); }
+          });
+          rang.append(ap, champ);
+          txt.appendChild(rang);
+        }
         ligne.append(txt, inter);
         corps.appendChild(ligne);
       });
@@ -63013,7 +66763,54 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
       menu.toggleAttribute('data-eco-vue-module', !!mVue);
       if (mVue) {
         dessinerVueModule(mVue);
+      } else if (ecoReglages.onglet === 'favoris') {
+        dessinerFavoris();
       } else if (ecoReglages.onglet === 'modules') {
+        dessinerBarreModules();
+        const conso = ecoConsoTout();
+        if (conso.length) {
+
+          const bloc = document.createElement('div');
+          bloc.className = 'eco-conso-bloc';
+          if (!ECO_CONSO.on) bloc.setAttribute('data-eco-conso-pause', '');
+          const tete = document.createElement('div');
+          tete.className = 'eco-conso-tete';
+          tete.setAttribute('data-eco-section', '');
+          if (ecoReglages.consoOuvert) tete.setAttribute('data-eco-ouvert', '');
+          tete.textContent = (ECO_CONSO.on ? '' : '⏸ ') + 'Consommation sur cette page' + (ECO_CONSO.on ? '' : ' (en pause)') + ' — le plus : ' + conso[0].nom + (conso.length > 1 ? ' · le moins : ' + conso[conso.length - 1].nom : '');
+          tete.title = 'Clic : plier / déplier';
+          tete.addEventListener('click', function () {
+            ecoReglages.consoOuvert = !ecoReglages.consoOuvert;
+            ecoEcrire(ecoReglages);
+            tete.toggleAttribute('data-eco-ouvert', !!ecoReglages.consoOuvert);
+            note.toggleAttribute('data-eco-plie', !ecoReglages.consoOuvert);
+            liste.toggleAttribute('data-eco-plie', !ecoReglages.consoOuvert);
+          });
+          const note = document.createElement('div');
+          note.className = 'eco-desc eco-desc-long';
+          note.textContent = 'Temps de lancement + travail en fond (par minute). Clics et frappes non comptés. Survole un module pour le détail.';
+          const max = Math.max.apply(null, conso.map(function (c) { return c.score; }).concat([1]));
+          const liste = document.createElement('div');
+          liste.className = 'eco-conso-liste';
+          conso.forEach(function (c) {
+            const l = document.createElement('div');
+            l.className = 'eco-conso-ligne';
+            l.title = ecoConsoTexte(c);
+            const n = document.createElement('span');
+            n.textContent = c.nom;
+            const b = document.createElement('span');
+            b.className = 'eco-conso-barre';
+            b.setAttribute('data-eco-conso', c.niveau);
+            b.style.setProperty('--eco-conso-p', String(Math.max(0.02, c.score / max)));
+            const v = document.createElement('small');
+            v.textContent = Math.round(c.lancement) + ' ms · ' + Math.round(c.parMin) + ' ms/min';
+            l.append(n, b, v);
+            liste.appendChild(l);
+          });
+          if (!ecoReglages.consoOuvert) { note.setAttribute('data-eco-plie', ''); liste.setAttribute('data-eco-plie', ''); }
+          bloc.append(tete, note, liste);
+          corps.appendChild(bloc);
+        }
         MODULES.forEach(function (m) {
           const actif = ecoReglages.modules[m.id] !== false;
           const ligne = document.createElement('div');
@@ -63039,6 +66836,18 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
           const ver = document.createElement('small');
           ver.textContent = 'v' + m.version;
           nom.appendChild(ver);
+          const co = conso && conso.filter(function (c) { return c.id === m.id; })[0];
+          if (co) {
+
+            const pt = document.createElement('span');
+            pt.className = 'eco-conso';
+            pt.setAttribute('data-eco-conso', co.niveau);
+            pt.setAttribute('data-eco-sans-teinte', '');
+            pt.textContent = co.niveau === 'léger' ? '●' : co.niveau;
+            pt.title = 'Consommation sur cette page : ' + co.niveau + (ECO_CONSO.on ? '' : ' (mesure en pause)') + '\n' + ecoConsoTexte(co);
+            if (!ECO_CONSO.on) pt.setAttribute('data-eco-conso-pause', '');
+            nom.appendChild(pt);
+          }
           if (m.etat === 'erreur') {
             const al = document.createElement('span');
             al.className = 'eco-alerte';
