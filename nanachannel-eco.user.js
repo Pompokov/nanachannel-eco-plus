@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nanachannel ECO+
 // @namespace    nanachannel-eco-plus
-// @version      0.9.359
+// @version      0.9.367
 // @downloadURL  https://github.com/Pompokov/nanachannel-eco-plus/raw/refs/heads/main/nanachannel-eco.user.js
 // @updateURL    https://github.com/Pompokov/nanachannel-eco-plus/raw/refs/heads/main/nanachannel-eco.user.js
 // @description  Nanachannel ECO+ : tous les modules réunis (Actualisation+, Blacklist+, Citations+, Fil+, Images+, Liens+, Messages+, MP+, Navigation+, Notifications+, Pages+, Profil+, Réactions+, Recherche+, Sondage+, Thèmes+, Uploads+, Vocaroo+, Widgets+), activables dans le menu ECO+ sous la bannière.
@@ -61,7 +61,7 @@
 // ==/UserScript==
 (function () {
   'use strict';
-  const ECO_VERSION = "0.9.359";
+  const ECO_VERSION = "0.9.367";
   const ECO_MODULES = [];
 
   function ecoMesuresUsine(W, mods, ecoute) {
@@ -7209,8 +7209,10 @@
 })();
   } });
 
-  ECO_MODULES.push({ id: "pages", nom: "Pages+", version: "0.79", desc: "Par pages, saisie du n° de page ; topics sans pages.", debut: "start", page: true, reglages: true, code: function (window, history) {
+  ECO_MODULES.push({ id: "pages", nom: "Pages+", version: "0.80", desc: "Par pages, saisie du n° de page ; topics sans pages.", debut: "start", page: true, reglages: true, code: function (window, history) {
     const { setTimeout, setInterval, requestAnimationFrame, requestIdleCallback, MutationObserver, IntersectionObserver, ResizeObserver } = (typeof ecoMesures === 'function' ? ecoMesures : (window.__ecoMesures || function () { return window; }))("pages");
+
+  function cheminIci() { return location.pathname.replace(/^(\/topics\/\d+\/[^/]+)\/\d+\/?$/, '$1'); }
 (function () {
   'use strict';
 
@@ -7332,7 +7334,7 @@
   const CLE = 'nanachan-pages-plus';
   const PARALLELE = 6;
   const MODES = [
-    ['pages', 'Par pages', 'Comme le site : 20 messages par page, + première / dernière page.'],
+    ['pages', 'Par pages', 'Comme le site : 20 messages par page (« ... » pour taper une page), + première / dernière page.'],
     ['saisie', 'Par pages + n° de page', 'Le numéro de la page est affiché : tapes-en un pour y aller directement.'],
     ['sans', 'Sans pages', 'Les pages suivantes s\'ajoutent sous les messages, ou tout le topic d\'un coup.'],
   ];
@@ -7414,8 +7416,8 @@
 
   const autoTemp = { chemin: null, liste: null, topic: null };
   function verifierAutoTemp() {
-    if (autoTemp.chemin === location.pathname) return;
-    autoTemp.chemin = location.pathname;
+    if (autoTemp.chemin === cheminIci()) return;
+    autoTemp.chemin = cheminIci();
     autoTemp.liste = null;
     autoTemp.topic = null;
   }
@@ -7495,8 +7497,8 @@
     } catch (e) { return null; }
   }
   function verifierChemin() {
-    if (liste.chemin === location.pathname) return;
-    liste.chemin = location.pathname;
+    if (liste.chemin === cheminIci()) return;
+    liste.chemin = cheminIci();
     liste.pageVoulue = null;
     liste.page = 1;
     liste.chargees = 1;
@@ -7520,8 +7522,8 @@
 
   const topic = { chemin: null, debut: 0, k: 0, cache: {}, parPage: 20, total: 1, nb: 0, chargement: false, bloque: false, postsAvant: 0, dernierEssai: 0 };
   function verifierTopic() {
-    if (topic.chemin === location.pathname) return;
-    topic.chemin = location.pathname;
+    if (topic.chemin === cheminIci()) return;
+    topic.chemin = cheminIci();
     topic.debut = 0;
     topic.k = 0;
     topic.cache = {};
@@ -7581,13 +7583,29 @@
 
   const tp = { chemin: null, page: 0, total: 0, parPage: 20, siteDerniere: null, pageVoulue: null, defiler: false, depuisActu: false };
   function verifierTp() {
-    if (tp.chemin === location.pathname) return;
-    tp.chemin = location.pathname;
+    if (tp.chemin === cheminIci()) return;
+    tp.chemin = cheminIci();
     tp.page = 0; tp.total = 0; tp.siteDerniere = null; tp.pageVoulue = null; tp.depuisActu = false;
   }
 
   function publierPagesTopic(fin, total, parPage) {
-    try { window.__ecoPagesTopic = { chemin: location.pathname, fin: fin, total: total, parPage: parPage, t: Date.now() }; } catch (e) {  }
+    try { window.__ecoPagesTopic = { chemin: cheminIci(), fin: fin, total: total, parPage: parPage, t: Date.now() }; } catch (e) {  }
+  }
+
+  function adresseTopic(page) {
+    const poser = function () {
+      if (!dansUnTopic() || mode() !== 'saisie' || tp.page !== page) return;
+      const voulu = cheminIci() + (page > 1 ? '/' + page : '');
+      if (location.pathname === voulu) return;
+      const r = routeurSite();
+      try {
+        if (r) { const x = r.replace({ path: voulu, query: r.currentRoute && r.currentRoute.value ? r.currentRoute.value.query : undefined, hash: location.hash }); if (x && x.catch) x.catch(function () {  }); }
+        else history.replaceState(history.state, '', voulu + location.search + location.hash);
+      } catch (e) {  }
+    };
+
+    setTimeout(poser, 30);
+    setTimeout(poser, 300);
   }
   function retenirTopic(d, page) {
     if (!d || !Array.isArray(d.results)) return;
@@ -7693,6 +7711,8 @@
       tp.siteDerniere = demandee;
       this.addEventListener('load', function () {
         try { retenirTopic(JSON.parse(this.responseText), effective); } catch (e) {  }
+
+        if (effective !== demandee) adresseTopic(effective);
       });
     }
     if (info.url && m === 'GET' && mode() === 'sans' && chargementTopic() !== 'tout') {
@@ -7765,8 +7785,8 @@
       '[' + ATTR + '-nav] input{-moz-appearance:textfield;}' +
       (mode() !== 'saisie' ? '[' + ATTR + '-nav-topic]{display:none!important;}' : '') +
 
-      (mode() === 'pages' ? '[' + ATTR + '-pagination] .pagination-ellipsis{cursor:pointer;border-radius:6px;padding:2px 6px;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:manipulation;}' +
-        '[' + ATTR + '-pagination] .pagination-ellipsis:hover{background:rgba(127,127,127,.22);}' : '') +
+      (mode() === 'pages' ? '[' + ATTR + '-pagination] span.pagination-ellipsis{cursor:pointer;border-radius:6px;padding:2px 6px;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:manipulation;}' +
+        '[' + ATTR + '-pagination] span.pagination-ellipsis:hover{background:rgba(127,127,127,.22);}' : '') +
 
       (reglages.liste.vue === 'catalogue' ? 'html[' + ATTR + '-catalogue] #nanachan-pages-plus-liste,html[' + ATTR + '-catalogue] #nanachan-recherche-plus-liste,' +
         'html[' + ATTR + '-catalogue] .topics-wrapper:not(#nanachan-recherche-plus-liste):not(#nanachan-pages-plus-liste),html[' + ATTR + '-catalogue] [' + ATTR + '-entete-liste]{display:none!important;}' +
@@ -7785,7 +7805,7 @@
     obs.observe(document, { childList: true, subtree: true });
   })();
 
-  function dansUnTopic() { return /\/topics\/\d+/.test(location.pathname); }
+  function dansUnTopic() { return /\/topics\/\d+/.test(cheminIci()); }
 
   function paginations() {
     const res = new Set();
@@ -7881,7 +7901,7 @@
   }
 
   const saut = { actif: null };
-  function idTopicOuvert() { const m = location.pathname.match(/\/topics\/(\d+)/); return m ? m[1] : null; }
+  function idTopicOuvert() { const m = cheminIci().match(/\/topics\/(\d+)/); return m ? m[1] : null; }
   function reponseFactice(xhr, objet) {
     const texte = JSON.stringify(objet);
     function def(k, v) { Object.defineProperty(xhr, k, { configurable: true, get: function () { return v; } }); }
@@ -7976,16 +7996,15 @@
       let a = null;
       if (fixPageActu()) {
         if (dansUnTopic()) {
-          if (mode() !== 'sans' && tp.chemin === location.pathname && tp.page > 1) {
-            a = { type: 'topic', chemin: location.pathname, page: tp.page, post: premierMessageVisible(), t: Date.now() };
-          } else if (mode() === 'sans' && window.scrollY > 200 && !document.documentElement.hasAttribute('data-rp-filtre-topic')) {
+
+          if (mode() === 'sans' && window.scrollY > 200 && !document.documentElement.hasAttribute('data-rp-filtre-topic')) {
 
             const post = premierMessageVisible();
-            if (post) a = { type: 'topic-sans', chemin: location.pathname, debut: topic.chemin === location.pathname ? topic.debut : 0, k: topic.chemin === location.pathname ? topic.k : 0, post: post, t: Date.now() };
+            if (post) a = { type: 'topic-sans', chemin: cheminIci(), debut: topic.chemin === cheminIci() ? topic.debut : 0, k: topic.chemin === cheminIci() ? topic.k : 0, post: post, t: Date.now() };
           }
-        } else if (modeListe() !== 'sans' && liste.chemin === location.pathname && liste.vu && liste.page > 1 && !filtreActif()) {
+        } else if (modeListe() !== 'sans' && liste.chemin === cheminIci() && liste.vu && liste.page > 1 && !filtreActif()) {
           const rech = document.querySelector('input[placeholder="Rechercher..."]');
-          if (!rech || !rech.value.trim()) a = { type: 'liste', chemin: location.pathname, page: liste.page, t: Date.now() };
+          if (!rech || !rech.value.trim()) a = { type: 'liste', chemin: cheminIci(), page: liste.page, t: Date.now() };
         }
       }
       if (a) sessionStorage.setItem(CLE_PAGE_ONGLET, JSON.stringify(a)); else sessionStorage.removeItem(CLE_PAGE_ONGLET);
@@ -7995,14 +8014,14 @@
   (function revenirALaPage() {
     let a = null;
     try { a = JSON.parse(sessionStorage.getItem(CLE_PAGE_ONGLET) || 'null'); sessionStorage.removeItem(CLE_PAGE_ONGLET); } catch (e) { return; }
-    if (!a || a.chemin !== location.pathname || !navigationActualisee()) return;
+    if (!a || a.chemin !== cheminIci() || !navigationActualisee()) return;
     if (Date.now() - (a.t || 0) > 12 * 3600 * 1000) return;
     if (a.type === 'topic-sans') {
       if (!dansUnTopic() || mode() !== 'sans' || !/^post-\d+$/.test(a.post || '')) return;
       if (location.hash && !/^#post-\d+$/.test(location.hash)) return;
 
       if (chargementTopic() !== 'tout' && a.k > 1) {
-        topic.chemin = location.pathname;
+        topic.chemin = cheminIci();
         topic.debut = Math.max(1, a.debut || 1);
         topic.k = Math.max(topic.debut, a.k);
         topic.depuisActu = true;
@@ -8016,17 +8035,18 @@
     if (!(a.page > 1)) return;
     if (a.type === 'liste') {
       if (dansUnTopic() || modeListe() === 'sans') { noterListe({ restaure: a.page, refus: dansUnTopic() ? 'topic' : 'sans' }); return; }
-      noterListe({ restaure: a.page, chemin: location.pathname });
-      liste.chemin = location.pathname;
+      noterListe({ restaure: a.page, chemin: cheminIci() });
+      liste.chemin = cheminIci();
       liste.pageVoulue = a.page;
       liste.page = a.page;
       return;
     }
+    if (a.type === 'topic') return;
     if (a.type !== 'topic' || !dansUnTopic() || mode() === 'sans') return;
     if (location.hash && !/^#post-\d+$/.test(location.hash)) return;
     const post = /^post-\d+$/.test(a.post || '') ? a.post : null;
     if (mode() === 'saisie') {
-      tp.chemin = location.pathname;
+      tp.chemin = cheminIci();
       tp.pageVoulue = a.page;
       tp.page = a.page;
       tp.depuisActu = true;
@@ -8188,6 +8208,8 @@
     const el = cible.closest('.pagination-ellipsis, span, div, button, a');
     if (!el || el.closest('[' + ATTR + ']') || el.children.length) return null;
     if (!el.classList.contains('pagination-ellipsis') && !/^(…|\.\.\.)$/.test(texteBouton(el))) return null;
+
+    if (el.tagName === 'BUTTON' || el.closest('button.pagination-ellipsis')) return null;
     const pag = paginations().find(function (p) { return p.contains(el); });
     return pag ? { points: el, pag: pag } : null;
   }
@@ -9081,8 +9103,8 @@
   function installerSans() {
     if (modeListe() !== 'sans') return;
     memoriserModeles();
-    if (sans.chemin !== location.pathname) {
-      sans.chemin = location.pathname;
+    if (sans.chemin !== cheminIci()) {
+      sans.chemin = cheminIci();
       sans.pages = {};
       sans.chargees = 0;
       sans.bloque = false;
@@ -12113,7 +12135,7 @@
       document.addEventListener('keydown', echap, true);
     }, 0);
   }
-  function idTopicCourant() { const m = location.pathname.match(/\/topics\/(\d+)/); return m ? +m[1] : 0; }
+  function idTopicCourant() { const m = cheminIci().match(/\/topics\/(\d+)/); return m ? +m[1] : 0; }
   function dessinerColonne() {
     if (!col.hote) return;
     relireNotifCol();
@@ -12232,9 +12254,9 @@
     if (!col.hote || !col.hote.isConnected) { if (col.hote) retirerColonne(); creerColonne(); }
     if (!document.getElementById(ID_ONGLET_COL)) creerOngletCol();
     placerColonne();
-    if (col.chemin !== location.pathname) {
+    if (col.chemin !== cheminIci()) {
       const premier = col.chemin === null;
-      col.chemin = location.pathname;
+      col.chemin = cheminIci();
       dessinerColonne();
       marquerCourantCol(true);
       if (!premier && Date.now() - col.derniere > 15000) rafraichirColonne(false);
@@ -14457,7 +14479,7 @@
 })();
   } });
 
-  ECO_MODULES.push({ id: "citations", nom: "Citations+", version: "4.65", desc: "Citations dépliées, aperçus et « Répondu par ».", debut: "idle", page: true, reglages: true, code: function (window, history) {
+  ECO_MODULES.push({ id: "citations", nom: "Citations+", version: "4.66", desc: "Citations dépliées, aperçus et « Répondu par ».", debut: "idle", page: true, reglages: true, code: function (window, history) {
     const { setTimeout, setInterval, requestAnimationFrame, requestIdleCallback, MutationObserver, IntersectionObserver, ResizeObserver } = (typeof ecoMesures === 'function' ? ecoMesures : (window.__ecoMesures || function () { return window; }))("citations");
 (function () {
   'use strict';
@@ -14593,7 +14615,13 @@
     });
     if (r.m447 && !lu.m447) { try { localStorage.setItem(CLE_REGLAGES, JSON.stringify(r)); } catch (e) {  } }
 
-    r.repondu = r.ligneCitation = r.mentionOP = r.couleurRangs = r.surlignage = r.boutonSujet = true;
+    r.repondu = r.mentionOP = r.couleurRangs = r.surlignage = r.boutonSujet = true;
+
+    if (!lu.m466) {
+      r.ligneCitation = true;
+      r.m466 = true;
+      try { localStorage.setItem(CLE_REGLAGES, JSON.stringify(Object.assign({}, lu, r))); } catch (e) {  }
+    }
     r.infosSujet = false;
     r.affReponses = r.affCitations;
 
@@ -14651,7 +14679,7 @@
 
   function appliquerReglage(cle) {
     if (cle === 'affCitations') { reglages.affReponses = reglages.affCitations; enregistrerReglages(); majAffichageCitations(); }
-    if (cle === 'ligneLongueur') {
+    if (cle === 'ligneLongueur' || cle === 'ligneCitation') {
 
       document.querySelectorAll('[' + ATTR_LIGNE + ']').forEach(function (l) { l.remove(); });
       try { majLignesCitations(); } catch (e) {  }
@@ -14686,7 +14714,7 @@
       dependants.forEach(function (d) {
         const actif = reglages[d[1]];
         d[0].style.opacity = actif ? '' : '0.4';
-        d[0].querySelectorAll('input').forEach(function (i) { i.disabled = !actif; });
+        d[0].querySelectorAll('input, button').forEach(function (i) { i.disabled = !actif; });
       });
     }
 
@@ -14762,9 +14790,10 @@
       if (dependDe) dependants.push([l, dependDe]);
     }
 
-    function choix(cle, texte, options) {
+    function choix(cle, texte, options, dependDe) {
       const l = ligne();
       l.style.flexWrap = 'wrap';
+      if (dependDe) { l.style.paddingLeft = '22px'; dependants.push([l, dependDe]); }
       const nom = document.createElement('span');
       nom.textContent = texte;
       nom.style.cssText = 'flex:1;min-width:0;';
@@ -14807,11 +14836,13 @@
     ];
     rubrique('Affichage des citations');
     choix('affCitations', 'Citations >>n°', OPTIONS_AFF);
-    choix('ligneLongueur', 'Ligne au-dessus des citations', [
+    caseACocher('ligneCitation', 'Ligne au-dessus des citations',
+      'Texte du post cité, en une ligne au-dessus des >>n° (comme 4chan X)');
+    choix('ligneLongueur', 'Longueur de la ligne', [
       ['courte', 'Courte', 'Texte du post coupé à 120 caractères'],
       ['moyenne', 'Moyenne', 'Texte du post coupé à 250 caractères'],
       ['entiere', 'Entière', 'Tout le texte du post (gros pavés compris)'],
-    ]);
+    ], 'ligneCitation');
     caseACocher('compact', 'Citations imbriquées compactes',
       'À partir du 2e niveau : sans avatar, marges réduites (s’applique aux prochaines citations dépliées)');
     caseACocher('mediasApi', 'Posts hors page : miniatures et lecteurs',
@@ -17742,7 +17773,8 @@
     (async function () {
       const pp = window.__ecoPagesTopic;
       let suivante, total, parPage = 20;
-      if (pp && pp.chemin === location.pathname && pp.fin) {
+
+      if (pp && pp.fin && String(pp.chemin).replace(/^(\/topics\/\d+\/[^/]+)\/\d+\/?$/, '$1') === location.pathname.replace(/^(\/topics\/\d+\/[^/]+)\/\d+\/?$/, '$1')) {
         total = pp.total; parPage = pp.parPage || 20;
         suivante = pp.fin + 1;
       } else {
@@ -30755,7 +30787,7 @@
 })();
   } });
 
-  ECO_MODULES.push({ id: "reactions", nom: "Réactions+", version: "1.94", desc: "Barre ⭐ des Favoris, stickers et réactions lisibles.", debut: "idle", page: false, reglages: true, code: function (GM_getValue, GM_setValue, GM_info) {
+  ECO_MODULES.push({ id: "reactions", nom: "Réactions+", version: "1.95", desc: "Barre ⭐ des Favoris, stickers et réactions lisibles.", debut: "idle", page: false, reglages: true, code: function (GM_getValue, GM_setValue, GM_info) {
     const { setTimeout, setInterval, requestAnimationFrame, requestIdleCallback, MutationObserver, IntersectionObserver, ResizeObserver } = (typeof ecoMesures === 'function' ? ecoMesures : (window.__ecoMesures || function () { return window; }))("reactions");
 (function () {
   'use strict';
@@ -31271,7 +31303,8 @@
   function construireStyle() {
     const r = reglages;
     let css =
-      '.reactions-bar .reaction-btn{display:inline-flex!important;align-items:center!important;gap:5px!important;min-height:28px;}' +
+
+      '.reactions-bar .reaction-btn{display:inline-flex!important;align-items:center!important;gap:5px!important;height:auto!important;min-height:28px;}' +
       '.reactions-bar .reaction-btn:not(:hover),.reactions-bar .reaction-btn:not(:hover) *{transform:none!important;zoom:1!important;}' +
 
       '.reactions-bar .reaction-btn img{height:' + r.tailleSticker + 'px!important;width:auto!important;' +
@@ -31606,7 +31639,7 @@
 
       let ancre = b;
       if (b.hasAttribute(ATTR_ICONE_POST)) {
-        const post = b.closest('.post-container');
+        const post = b.closest('.post-container') || b.closest('.miniblog-item');
         const smiley = duPost(post, '.reaction-list-btn');
         if (smiley) ancre = smiley;
 
@@ -33876,7 +33909,8 @@
     enregistrer();
     majQuickReacs();
   }
-  function postDuMenu(menuSite) { return postReel(menuSite.closest('.post-container')); }
+
+  function postDuMenu(menuSite) { return postReel(menuSite.closest('.post-container')) || menuSite.closest('.miniblog-item'); }
   async function reagirQuick(post, url) {
     if (!post) return;
     if (fenetreFavPost && fenetreFavPost.post === post) fermerFavorisPost();
@@ -38622,7 +38656,7 @@
 })();
   } });
 
-  ECO_MODULES.push({ id: "shitbox", nom: "Widgets+", version: "0.26", desc: "Widgets rétractables (placement à droite / en dessous), Favoris (liste / grille, dossiers ; widget et Notifications+) et Shitbox (pubs au clic, défilement réglable).", debut: "idle", page: false, reglages: true, code: function (GM_getValue, GM_setValue, GM_info) {
+  ECO_MODULES.push({ id: "shitbox", nom: "Widgets+", version: "0.31", desc: "Widgets rétractables (placement à droite / en dessous), Favoris (liste / grille, dossiers ; widget et Notifications+), calendrier des évènements et Shitbox (pubs au clic, défilement réglable).", debut: "idle", page: false, reglages: true, code: function (GM_getValue, GM_setValue, GM_info) {
     const { setTimeout, setInterval, requestAnimationFrame, requestIdleCallback, MutationObserver, IntersectionObserver, ResizeObserver } = (typeof ecoMesures === 'function' ? ecoMesures : (window.__ecoMesures || function () { return window; }))("shitbox");
     let sbpDefil = 0;
     let sbpVu = true, sbpVuCible = null, sbpVuObs = null;
@@ -38740,6 +38774,8 @@
     favFiltres: { tags: [] },
     favMesAuto: 'tous',
     favTitreFenetre: true,
+    calendrier: true,
+    calOuvert: false,
   };
   const LIMITES = { dureeImage: [2, 20] };
   const BARRES = ['mini', 'forum'];
@@ -39616,6 +39652,8 @@
 
     menu.appendChild(ligneCase('Favoris : Explorateur', 'favoris', 'Bouton ▾ sur le widget Favoris : tes sujets favoris du site façon Explorateur (dossiers, Liste / Détails / Grille, tri, filtres, recherche, sélection de plusieurs sujets, clic droit ou ⋯ = menu) ; ⤢ l\'ouvre en grand (aussi « 📁 Ranger mes favoris » de Notifications+). « Retirer » enlève vraiment le sujet de tes favoris du site (« Annuler » quelques secondes).', function () { majFavoris(); redessinerFavoris(); }));
 
+    menu.appendChild(ligneCase('Calendrier des évènements', 'calendrier', 'Bouton ▾ sur le widget Événements : le mois en calendrier (jours avec un évènement en couleur, clic sur un jour = ses évènements) et les prochains évènements, avec un lien vers leur topic. Le titre « Événements » mène toujours à la page du forum.', function () { majCalendrier(); }));
+
     menu.appendChild(ligneCase('Titre « Favoris » : ouvrir en grand', 'favTitreFenetre', 'Clic sur le titre « Favoris » du widget : l\'Explorateur des favoris en grand, au lieu de la page des favoris du site (Ctrl + clic ou clic du milieu : la page, comme avant).'));
 
     const ligneMes = el('div', 'sbp-ligne');
@@ -39875,6 +39913,8 @@
         const miens = new Set(mesTopicsIds());
         avant.forEach(function (f) { if (!dans.has(f.id) && miens.has(f.id)) exclureMien(f.id, true); });
       }
+
+      favListe.forEach(function (f) { if (favMesExclus.indexOf(f.id) !== -1) exclureMien(f.id, false); });
       setTimeout(verifierMesTopicsAuto, 0);
       return favListe;
     }, function (e) {
@@ -40073,7 +40113,7 @@
       return;
     }
     demanderImage(id, function (u) {
-      if (!v.isConnected || v.querySelector('.sbp-fav-image img')) return;
+      if (!v.isConnected || v.querySelector('.sbp-fav-image img:not(.sbp-fav-ico-dossier)')) return;
       if (!u) { v.setAttribute('data-sbp-fav-img', 'aucune'); return; }
       const img = el('img');
       img.alt = '';
@@ -40705,7 +40745,12 @@
     const ti = lireInfosSujets();
     const ordreSite = new Map();
     favListe.forEach(function (f, i) { ordreSite.set(f.id, i); });
-    const estMien = function (f) { return !!((infos[f.id] && infos[f.id].moi) || (etat && etat.suivis[f.id] && etat.suivis[f.id].moi)); };
+
+    const moiP = monPseudoFav();
+    const estMien = function (f) {
+      return !!((infos[f.id] && infos[f.id].moi) || (etat && etat.suivis[f.id] && etat.suivis[f.id].moi) ||
+        (moiP && ti[f.id] && ti[f.id].a && String(ti[f.id].a).trim().toLowerCase() === moiP));
+    };
     const estNouveau = function (f) { return !!((infos[f.id] && infos[f.id].badge) || (etat && nonLu(etat.suivis[f.id]))); };
     let mesHors = [];
 
@@ -40822,11 +40867,37 @@
       const badge = info && info.badge ? el('span', 'sbp-fav-badge', info.badge) : null;
       if (badge && info.badgeStyle) badge.style.cssText = info.badgeStyle;
       if (vue === 'grille') {
+
         item.setAttribute('data-sbp-fav-id', f.id);
         const im = el('span', 'sbp-fav-image');
-        if (badge) im.appendChild(badge);
+        const ico = document.createElement('img');
+        ico.className = 'sbp-fav-ico-dossier';
+        ico.alt = '';
+        ico.src = f.rose || ti.p ? DOSSIER_ROSE : (ti.n || 0) > 20 ? DOSSIER_CHAUD : DOSSIER_NORMAL;
+        im.appendChild(ico);
+        if (f.rose || ti.p) im.appendChild(el('span', 'sbp-fav-nsfw', 'NSFW'));
         item.appendChild(im);
+        const inf = el('span', 'sbp-fav-infos');
+        const r = el('b', null, 'R: ' + (ti.n != null ? ti.n : '…'));
+        inf.appendChild(r);
+        if (ti.d) inf.appendChild(document.createTextNode(' · ' + deltaTexte(ti.d)));
+        if (ti.a) inf.appendChild(document.createTextNode(' · ' + ti.a));
+        item.appendChild(inf);
+        titre.textContent = (mien ? '✎ ' : '') + (ti.k ? '🔒 ' : '') + f.titre;
+        if (badge) { badge.classList.add('sbp-fav-badge-titre'); titre.appendChild(badge); }
         item.appendChild(titre);
+        if ((ti.g || []).length) {
+          const tg = el('span', 'sbp-fav-tags');
+          ti.g.forEach(function (nom) {
+            const c = COULEURS_TAGS_FAV[nom] || ['rgb(90,90,90)', 'white'];
+            const t = el('span', null, nom);
+            t.style.background = c[0];
+            t.style.color = c[1];
+            tg.appendChild(t);
+          });
+          item.appendChild(tg);
+        }
+        if ((ti.n || 0) > 20 && !(f.rose || ti.p)) item.setAttribute('data-chaud', '');
         observerVignette(item);
       } else {
         if (mien) item.appendChild(el('span', 'sbp-fav-icone', '✎'));
@@ -40853,7 +40924,7 @@
     } else acts.appendChild(boutonIco('sbp-fav-retirer sbp-fav-ajouter', ICO_FAV.etoileVide, 'Ajouter aux favoris', function () { exclureMien(f.id, false); ajouterFavori(f); }));
     item.appendChild(acts);
 
-    if (vue !== 'grille' && ti.n == null && !(favEchecs[f.id] && Date.now() - favEchecs[f.id] < 600000)) { item.setAttribute('data-sbp-fav-id', f.id); item.setAttribute('data-sbp-fav-infos', ''); observerVignette(item); }
+    if ((ti.n == null || (vue === 'grille' && !ti.g)) && !(favEchecs[f.id] && Date.now() - favEchecs[f.id] < 600000)) {  item.setAttribute('data-sbp-fav-id', f.id); item.setAttribute('data-sbp-fav-infos', ''); observerVignette(item); }
     gestesSujet(item, f, ctx, zone, ordreVisible);
     return item;
   }
@@ -40931,6 +41002,11 @@
   let favMesEnCours = false;
   let favMesRefus = false;
   function mesTopicsIds() { const e = etatNotifs(); return e ? Object.keys(e.suivis).filter(function (id) { return e.suivis[id] && e.suivis[id].moi; }) : []; }
+
+  function monPseudoFav() {
+    const a = document.querySelector('header a.bouton-compte, header .bouton-compte');
+    return a ? (a.textContent || '').trim().toLowerCase() : '';
+  }
   function exclureMien(id, oui) {
     id = String(id);
     const i = favMesExclus.indexOf(id);
@@ -41067,10 +41143,10 @@
     st.textContent = [
       '#app .widget[data-sbp-fav-widget]{position:relative}',
       '#app .widget[data-sbp-fav-widget]>h2{padding-right:44px!important}',
-      '.sbp-fav-btn{position:absolute;top:6px;right:10px;display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;padding:0;border:none;border-radius:7px;background:none;color:inherit;opacity:.7;cursor:pointer}',
-      '.sbp-fav-btn:hover,.sbp-fav-btn:focus-visible{opacity:1;background:rgba(127,127,127,.18)}',
-      '.sbp-fav-btn svg{transition:transform .18s}',
-      '.sbp-fav-btn[aria-expanded=true] svg{transform:rotate(180deg)}',
+      '.sbp-fav-btn,.sbp-cal-btn{position:absolute;top:6px;right:10px;display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;padding:0;border:none;border-radius:7px;background:none;color:inherit;opacity:.7;cursor:pointer}',
+      '.sbp-fav-btn:hover,.sbp-fav-btn:focus-visible,.sbp-cal-btn:hover,.sbp-cal-btn:focus-visible{opacity:1;background:rgba(127,127,127,.18)}',
+      '.sbp-fav-btn svg,.sbp-cal-btn svg{transition:transform .18s}',
+      '.sbp-fav-btn[aria-expanded=true] svg,.sbp-cal-btn[aria-expanded=true] svg{transform:rotate(180deg)}',
       '.widget>.sbp-fav-zone{padding:4px 12px 10px 15px}',
       '[data-favw-contexte=panneau].sbp-fav-zone{padding:6px 10px 8px}',
       '.sbp-fav-barre{display:flex;align-items:center;gap:8px;margin:2px 0 6px}',
@@ -41241,7 +41317,8 @@
       '@media (max-width:640px){.sbp-fav-fond{align-items:stretch}.sbp-fav-fenetre{width:100vw;height:100%;border-radius:0}.sbp-fav-fenetre>.sbp-fav-zone{grid-template-columns:minmax(0,1fr)}.sbp-fav-volet{display:none}}',
       '.sbp-fav-rangee .sbp-fav-dossier{margin-left:6px;font-weight:normal;vertical-align:middle}',
       '.sbp-fav-cherche{width:100%;box-sizing:border-box;margin:0 0 6px;padding:4px 8px;border-radius:6px;border:1px solid rgba(127,127,127,.4);background:transparent;color:inherit;font:inherit;font-size:12.5px}',
-      '.sbp-fav-corps[data-vue=grille]{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}',
+      '.sbp-fav-corps[data-vue=grille]{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px 8px;align-items:start}',
+      '.sbp-fav-zone[data-favw-contexte=widget] .sbp-fav-corps[data-vue=grille]{grid-template-columns:repeat(auto-fill,minmax(130px,1fr))}',
       '.sbp-fav-groupe{grid-column:1/-1;display:flex;align-items:center;gap:8px;padding:6px 2px 3px;font-size:11px;font-weight:bold;opacity:.7}',
       '.sbp-fav-groupe-trait{flex:1;height:0;border-top:1px solid rgba(127,127,127,.35)}',
       '.sbp-fav-ligne{display:flex;align-items:center;gap:6px;min-width:0;padding:5px 6px 5px 8px;border-radius:6px;color:inherit;text-decoration:none;font-size:13.5px;line-height:1.3;border-left:3px solid transparent}',
@@ -41260,17 +41337,31 @@
       '.sbp-fav-act-retirer[data-arme]{opacity:1;background:#c0392b;color:#fff;font-weight:bold}',
       '[data-retrait]{opacity:.45;pointer-events:none}',
       '.sbp-glisse{opacity:.5}',
-      '.sbp-fav-carte{position:relative;display:flex;flex-direction:column;min-width:0;border-radius:8px;overflow:hidden;color:inherit;text-decoration:none;background:rgba(127,127,127,.12)}',
-      '.sbp-fav-carte:focus-visible{background:rgba(127,127,127,.22)}',
-      '.sbp-fav-image{position:relative;display:block;aspect-ratio:1/1;overflow:hidden;background:rgba(127,127,127,.15)}',
-      '.sbp-fav-image::after{content:"★";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:22px;opacity:.35;pointer-events:none}',
-      '.sbp-fav-carte[data-sbp-fav-img=oui] .sbp-fav-image::after{content:none}',
-      '.sbp-fav-image img{display:block;width:100%;height:100%;object-fit:cover}',
-      '.sbp-fav-carte[data-rose] .sbp-fav-image img{filter:blur(10px);transform:scale(1.1);transition:filter .2s}',
-      '.sbp-fav-carte[data-rose]:hover .sbp-fav-image img{filter:none}',
-      '.sbp-fav-carte .sbp-fav-badge{position:absolute;left:4px;top:4px;z-index:1}',
-      '.sbp-fav-carte .sbp-fav-actions{position:absolute;right:3px;top:3px;z-index:1;background:rgba(0,0,0,.55);border-radius:6px;color:#fff}',
-      '.sbp-fav-carte .sbp-fav-titre{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin:5px 6px 6px;max-height:2.5em;font-size:12px;line-height:1.25;word-break:break-word}',
+
+      '.sbp-fav-carte{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;gap:3px;min-width:0;padding:6px 6px 8px;border-radius:8px;color:var(--text-color,inherit);text-decoration:none;background:var(--topic-color-1,rgba(127,127,127,.08));border:1px solid var(--list-color,rgba(127,127,127,.25));box-sizing:border-box}',
+      '.sbp-fav-carte:nth-of-type(2n){background:var(--topic-color-2,var(--topic-color-1,rgba(127,127,127,.12)))}',
+      '.sbp-fav-carte:focus-visible{outline:2px solid var(--line-color,var(--button-color,#ffb840));outline-offset:-1px}',
+      '.sbp-fav-carte[data-rose]{border-color:#d9559f}',
+      '.sbp-fav-carte[data-chaud]{background-image:var(--eco-chaud,linear-gradient(to right,#e9456024,#e9456000 45%))}',
+      '.sbp-fav-carte[data-chaud] .sbp-fav-infos b{color:#DB3A2A;font-weight:800}',
+      '.sbp-fav-image{position:relative;display:flex;align-items:center;justify-content:center;width:100%;height:130px;overflow:hidden;border-radius:5px;background:rgba(0,0,0,.18)}',
+      '.sbp-fav-image::after{content:none!important}',
+      '.sbp-fav-image .sbp-fav-ico-dossier{width:32px;height:auto;opacity:.75;image-rendering:pixelated}',
+      '.sbp-fav-carte[data-sbp-fav-img=oui] .sbp-fav-ico-dossier{display:none}',
+      '.sbp-fav-image img:not(.sbp-fav-ico-dossier){display:block;width:100%;height:100%;object-fit:contain}',
+      '.sbp-fav-carte[data-rose]:not(:hover) .sbp-fav-image img:not(.sbp-fav-ico-dossier){filter:blur(14px) saturate(.8)}',
+      '.sbp-fav-nsfw{position:absolute;left:4px;top:4px;font:800 9.5px/14px Arial,sans-serif;letter-spacing:.4px;padding:0 5px;border-radius:4px;background:#d9559f;color:#fff}',
+      '.sbp-fav-infos{font-size:11px;opacity:.85;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+      '.sbp-fav-infos b{font-weight:700}',
+      '.sbp-fav-carte .sbp-fav-titre{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;margin:0;max-height:none;font-weight:700;font-size:12.5px;line-height:1.25;color:var(--topic-title-color,inherit);word-break:break-word}',
+      '.sbp-fav-carte .sbp-fav-badge-titre{position:static!important;display:inline-block;margin-left:4px;vertical-align:1px}',
+      '.sbp-fav-tags{display:flex;flex-wrap:wrap;justify-content:center;gap:3px}',
+      '.sbp-fav-tags span{font-size:10px;font-weight:700;padding:1px 6px;border-radius:5px}',
+
+      '.sbp-fav-carte .sbp-fav-actions{position:absolute!important;right:10px!important;top:10px!important;left:auto!important;bottom:auto!important;transform:none!important;z-index:2;display:flex;gap:2px;padding:2px;background:rgba(0,0,0,.55);border-radius:7px;color:#fff;opacity:1}',
+      '.sbp-fav-carte .sbp-fav-actions .sbp-fav-retirer{min-width:24px;width:24px;height:24px;padding:0;background:transparent!important}',
+      '.sbp-fav-carte .sbp-fav-actions .sbp-fav-retirer svg{width:14px;height:14px}',
+      '@media (hover:none),(max-width:640px){.sbp-fav-carte .sbp-fav-actions .sbp-fav-retirer{min-width:34px;width:34px;height:34px}}',
       '.sbp-fav-carte[data-nouveau] .sbp-fav-titre{font-weight:bold}',
       '.sbp-fav-vide{grid-column:1/-1;font-size:13px;opacity:.7;padding:4px 2px}',
       '.sbp-fav-menu{position:fixed;z-index:2147483000;min-width:170px;max-width:260px;padding:4px;border-radius:8px;background:var(--dropdown-menu-bg,#25282c);color:var(--text-color,#C5C8C6);border:1px solid var(--dropdown-menu-border,#373B41);font-size:13px}',
@@ -41284,19 +41375,295 @@
       '.sbp-fav-saisie-titre{font-weight:bold}',
       '.sbp-fav-saisie-boite input{padding:6px 8px;border-radius:6px;border:1px solid rgba(127,127,127,.45);background:rgba(127,127,127,.12);color:inherit;font-size:14px}',
       '.sbp-fav-saisie-bas{display:flex;justify-content:flex-end;gap:8px}',
+
+      '.sbp-fav-zone{container-type:inline-size}',
+      '.sbp-fav-zone .sbp-fav-rangee{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:stretch;background:var(--topic-color-1);border:1px solid var(--list-color,rgba(127,127,127,.35));margin-top:-1px}',
+      '.sbp-fav-zone .sbp-fav-rangee:nth-of-type(2n){background:var(--topic-color-2)}',
+      '.sbp-fav-zone .sbp-fav-groupe+.sbp-fav-rangee,.sbp-fav-zone .sbp-fav-rangee:first-child{margin-top:0}',
+      '.sbp-fav-zone .sbp-fav-rangee .topic{background:transparent}',
+      '.sbp-fav-zone .sbp-fav-rangee .topic table{table-layout:fixed;border:0!important;height:100%}',
+      '.sbp-fav-zone .sbp-fav-rangee .topic tr>th:first-child{width:auto!important;padding:0!important}',
+      '.sbp-fav-zone .sbp-fav-rangee .topic tr>th:last-child{width:54px!important;padding:4px 2px!important;border:0!important;border-left:1px solid var(--list-color,rgba(127,127,127,.35))!important;text-align:center;font-size:12px;white-space:nowrap}',
+      '.sbp-fav-zone .sbp-fav-rangee .topic-link{padding:4px 6px 6px 4px!important;gap:6px}',
+      '.sbp-fav-zone .sbp-fav-rangee .topic-link>img{flex:none;padding-top:4px!important}',
+      '.sbp-fav-zone .sbp-fav-rangee>.sbp-fav-actions{display:flex;align-items:center;gap:4px;padding:0 6px;border-left:1px solid var(--list-color,rgba(127,127,127,.35));position:static;margin:0;transform:none;top:auto;right:auto}',
+
+      '@media (hover:none),(max-width:640px){' +
+        '.sbp-fav-zone{-webkit-tap-highlight-color:transparent}' +
+        '.sbp-fav-ico{min-width:40px;height:40px;font-size:15px}' +
+        '.sbp-fav-cmd{height:40px;padding:0 9px}' +
+        '.sbp-fav-adresse{padding:3px 4px}' +
+        '.sbp-fav-cherche,.sbp-fav-saisie-boite input{font-size:16px!important;min-height:40px}' +
+        '.sbp-fav-zone .sbp-fav-rangee>.sbp-fav-actions .sbp-fav-retirer{min-width:38px;min-height:38px}' +
+        '.sbp-fav-groupe{min-height:34px}' +
+        '.sbp-fav-btn,.sbp-cal-btn{width:40px;height:40px;top:2px;right:6px}' +
+        '.sbp-fav-menu button,.sbp-fav-menu [role=menuitem]{min-height:40px}' +
+        '.sbp-fav-miette{min-height:38px;padding:3px 8px}' +
+        '.sbp-fav-menu{max-height:calc(100dvh - 16px);overflow-y:auto;overscroll-behavior:contain}' +
+      '}',
+      '@media (max-width:640px){' +
+        '.sbp-fav-fond{padding:0!important}' +
+        '.sbp-fav-fenetre{width:100%!important;max-width:none!important;height:100dvh!important;max-height:none!important;border-radius:0!important;border:0!important}' +
+        '.sbp-fav-fenetre-tete{position:sticky;top:0;z-index:9;background:inherit;padding:4px 4px 4px 12px}' +
+        '.sbp-fav-fenetre-tete .sbp-fav-ico{min-width:44px;height:44px;font-size:18px}' +
+        '.sbp-fav-fenetre>.sbp-fav-zone{overscroll-behavior:contain;-webkit-overflow-scrolling:touch}' +
+      '}',
+
+      '@container (max-width:559px){.sbp-fav-zone .sbp-fav-rangee>.sbp-fav-actions{flex-direction:column;justify-content:center;padding:4px}}',
+      '@container (min-width:560px){' +
+        '.sbp-fav-zone .sbp-fav-rangee .topic .tags-mobile{display:none!important}' +
+        '.sbp-fav-zone .sbp-fav-rangee .topic .tags{display:flex!important;flex-direction:row!important;flex-wrap:nowrap;justify-content:flex-end;align-items:center;gap:6px;margin-left:auto;padding:0 8px;flex:none;width:auto!important;align-self:center}' +
+        '.sbp-fav-zone .sbp-fav-rangee .topic .tag-container{padding:6px 10px!important;border-radius:8px!important;font-size:12px!important;line-height:1.2}' +
+        '.sbp-fav-zone .sbp-fav-rangee .topic h3.titre{font-size:14.5px}' +
+        '.sbp-fav-zone .sbp-fav-rangee .topic .hap>p{font-size:12px}' +
+        '.sbp-fav-zone .sbp-fav-rangee .topic tr>th:last-child{width:72px!important;font-size:13px}}',
+    ].join('\n');
+    (document.head || document.documentElement).appendChild(st);
+  })();
+
+  const CAL_JOURS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+  const cal = { liste: null, t: 0, lecture: null, erreur: '', mois: null, jour: null };
+  (function () {
+    const g = GM_getValue('evenements', null);
+    if (g && Array.isArray(g.liste)) { cal.liste = g.liste; cal.t = 0; }
+  })();
+  function calCle(d) { return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
+  function calDate(s) { const d = new Date(s); return isNaN(d) ? null : d; }
+  function calNormaliser(x) {
+    if (!x || typeof x !== 'object' || !x.name) return null;
+    const debut = calDate(x.date);
+    if (!debut) return null;
+    const fin = calDate(x.end_date) || debut;
+    return { id: x.id, nom: String(x.name), topic: typeof x.topic === 'string' ? x.topic : '', debut: debut.toISOString(), fin: (fin < debut ? debut : fin).toISOString() };
+  }
+  async function calLire(force) {
+    if (cal.lecture) return cal.lecture;
+    if (!force && cal.liste && Date.now() - cal.t < 5 * 60000) return null;
+    cal.lecture = (async function () {
+      const res = new Map();
+      try {
+        const rc = await fetch('/nanachannel/events/current/', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+        if (rc.ok) { const e = calNormaliser(await rc.json().catch(function () { return null; })); if (e) res.set(e.id || e.nom + e.debut, e); }
+        for (let p = 1; p <= 5; p++) {
+          const r = await fetch('/nanachannel/events/upcoming/?page=' + p, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          const j = await r.json();
+          (Array.isArray(j && j.results) ? j.results : []).forEach(function (x) { const e = calNormaliser(x); if (e) res.set(e.id || e.nom + e.debut, e); });
+          if (!j || !j.next) break;
+        }
+
+        const avant = (cal.liste || []).filter(function (e) { return new Date(e.fin) < new Date() && !res.has(e.id || e.nom + e.debut); });
+        cal.liste = avant.concat(Array.from(res.values())).sort(function (a, b) { return a.debut < b.debut ? -1 : 1; }).slice(-60);
+        cal.t = Date.now();
+        cal.erreur = '';
+        GM_setValue('evenements', { t: cal.t, liste: cal.liste });
+      } catch (e) {
+        cal.erreur = 'Évènements illisibles pour l\'instant (' + (e.message || e) + ').';
+      } finally { cal.lecture = null; }
+      majCalendrier(true);
+    })();
+    return cal.lecture;
+  }
+  function calDuJour(d) {
+    const a = new Date(d.getFullYear(), d.getMonth(), d.getDate()), b = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+    return (cal.liste || []).filter(function (e) { return new Date(e.debut) < b && new Date(e.fin) >= a; });
+  }
+  function calHeure(d) { return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); }
+  function calJourCourt(d) { return d.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' }); }
+  function calQuand(e) {
+    const d = new Date(e.debut), f = new Date(e.fin);
+    if (calCle(d) === calCle(f)) return calJourCourt(d) + ' · ' + calHeure(d) + (+f !== +d ? ' → ' + calHeure(f) : '');
+    return calJourCourt(d) + ' ' + calHeure(d) + ' → ' + calJourCourt(f) + ' ' + calHeure(f);
+  }
+  function calLigne(e) {
+    const maintenant = new Date();
+    const enCours = new Date(e.debut) <= maintenant && maintenant < new Date(e.fin);
+    const passe = new Date(e.fin) <= maintenant;
+    const l = el('div', 'sbp-cal-evt' + (enCours ? ' sbp-cal-encours' : '') + (passe ? ' sbp-cal-passe' : ''));
+    const nom = e.topic ? el('a', 'sbp-cal-nom', e.nom) : el('span', 'sbp-cal-nom', e.nom);
+    if (e.topic) {
+      nom.href = e.topic.replace(/\/$/, '');
+      nom.title = 'Ouvrir le topic de l\'évènement';
+      nom.addEventListener('click', function (ev) {
+        if (ev.button || ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey || !pontNavigation()) return;
+        ev.preventDefault();
+        document.documentElement.setAttribute('data-sbp-aller', nom.getAttribute('href'));
+        document.dispatchEvent(new Event('sbp-aller'));
+      });
+    }
+    l.appendChild(nom);
+    const q = el('span', 'sbp-cal-quand', calQuand(e));
+    if (enCours) q.insertBefore(el('b', 'sbp-cal-badge', 'En cours'), q.firstChild);
+    l.appendChild(q);
+    return l;
+  }
+  function dessinerCalendrier(zone) {
+    zone.textContent = '';
+    const auj = new Date();
+    if (!cal.mois) cal.mois = new Date(auj.getFullYear(), auj.getMonth(), 1);
+    const a = cal.mois.getFullYear(), mo = cal.mois.getMonth();
+    const ici = a * 12 + mo;
+    const moisEvts = new Set();
+    (cal.liste || []).forEach(function (e) {
+      for (let d = new Date(e.debut), f = new Date(e.fin); d <= f; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) moisEvts.add(d.getFullYear() * 12 + d.getMonth());
+    });
+    const tri = Array.from(moisEvts).sort(function (x, y) { return x - y; });
+    const avant = tri.filter(function (x) { return x < ici; }).pop();
+    const apres = tri.filter(function (x) { return x > ici; })[0];
+    const tete = el('div', 'sbp-cal-tete');
+    const nav = function (txt, titre, cible) {
+      const b = el('button', 'sbp-cal-nav', txt);
+      b.type = 'button';
+      b.title = titre;
+      if (cible == null) b.disabled = true;
+      else b.addEventListener('click', function () { cal.mois = new Date(Math.floor(cible / 12), cible % 12, 1); cal.jour = null; dessinerCalendrier(zone); });
+      return b;
+    };
+    const tm = cal.mois.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+    const titre = el('button', 'sbp-cal-titre', tm.charAt(0).toUpperCase() + tm.slice(1));
+    titre.type = 'button';
+    titre.title = 'Revenir à ce mois-ci';
+    titre.addEventListener('click', function () { cal.mois = new Date(auj.getFullYear(), auj.getMonth(), 1); cal.jour = null; dessinerCalendrier(zone); });
+    const relire = el('button', 'sbp-cal-nav sbp-cal-relire', '⟳');
+    relire.type = 'button';
+    relire.title = 'Relire les évènements';
+    relire.addEventListener('click', function () { relire.disabled = true; calLire(true); });
+    if (cal.lecture) relire.disabled = true;
+    tete.append(nav('«', 'Mois précédent avec un évènement', avant), nav('‹', 'Mois précédent', ici - 1), titre, nav('›', 'Mois suivant', ici + 1), nav('»', 'Mois suivant avec un évènement', apres), relire);
+    zone.appendChild(tete);
+    const g = el('div', 'sbp-cal-grille');
+    CAL_JOURS.forEach(function (j) { g.appendChild(el('span', 'sbp-cal-js', j)); });
+    const decal = (new Date(a, mo, 1).getDay() + 6) % 7;
+    const nb = new Date(a, mo + 1, 0).getDate();
+    for (let i = 0; i < decal; i++) g.appendChild(el('span'));
+    for (let j = 1; j <= nb; j++) {
+      const d = new Date(a, mo, j);
+      const evts = calDuJour(d);
+      const b = el('button', 'sbp-cal-j', String(j));
+      b.type = 'button';
+      if (evts.length) {
+        b.classList.add('sbp-cal-plein');
+        b.title = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) + ' : ' + evts.map(function (e) { return e.nom; }).join(', ');
+      } else b.title = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) + ' : aucun évènement';
+      if (calCle(d) === calCle(auj)) b.classList.add('sbp-cal-auj');
+      if (cal.jour === calCle(d)) b.classList.add('sbp-cal-sel');
+      if (d < new Date(auj.getFullYear(), auj.getMonth(), auj.getDate())) b.classList.add('sbp-cal-avant');
+      b.addEventListener('click', function () { cal.jour = cal.jour === calCle(d) ? null : calCle(d); dessinerCalendrier(zone); });
+      g.appendChild(b);
+    }
+    zone.appendChild(g);
+    const liste = el('div', 'sbp-cal-liste');
+    if (cal.jour) {
+      const p = cal.jour.split('-');
+      const d = new Date(+p[0], +p[1] - 1, +p[2]);
+      const evts = calDuJour(d);
+      liste.appendChild(el('div', 'sbp-cal-sous', d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })));
+      if (evts.length) evts.forEach(function (e) { liste.appendChild(calLigne(e)); });
+      else liste.appendChild(el('div', 'sbp-cal-vide', 'Aucun évènement ce jour-là.'));
+    } else {
+      const prochains = (cal.liste || []).filter(function (e) { return new Date(e.fin) > auj; }).slice(0, 5);
+      liste.appendChild(el('div', 'sbp-cal-sous', 'À venir'));
+      if (prochains.length) prochains.forEach(function (e) { liste.appendChild(calLigne(e)); });
+      else liste.appendChild(el('div', 'sbp-cal-vide', cal.liste ? 'Aucun évènement prévu pour l\'instant.' : 'Lecture des évènements…'));
+    }
+    if (cal.erreur) liste.appendChild(el('div', 'sbp-cal-vide sbp-cal-erreur', cal.erreur));
+    zone.appendChild(liste);
+  }
+  function widgetEvenements() {
+    const hs = document.querySelectorAll('#app .widget-col .widget > h2');
+    for (let i = 0; i < hs.length; i++) if (/^\s*[ÉE]v[éè]nements\s*$/i.test(hs[i].textContent || '')) return hs[i].parentElement;
+    return null;
+  }
+  function majCalendrier(redessiner) {
+    const w = widgetEvenements();
+    document.querySelectorAll('.sbp-cal-btn, .widget > .sbp-cal-zone').forEach(function (x) { if (!w || !w.contains(x) || !reglages.calendrier) x.remove(); });
+    if (w) w.toggleAttribute('data-sbp-cal-widget', !!reglages.calendrier);
+    if (!w || !reglages.calendrier) return;
+    let b = w.querySelector(':scope > .sbp-cal-btn');
+    if (!b) {
+
+      b = el('button', 'sbp-cal-btn');
+      b.type = 'button';
+      b.setAttribute('data-sbp-cal', '');
+      b.setAttribute('data-eco-ui', '');
+      b.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
+      b.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        reglages.calOuvert = !reglages.calOuvert;
+        enregistrerReglages();
+        majCalendrier();
+      });
+      w.appendChild(b);
+    }
+    b.setAttribute('aria-expanded', String(!!reglages.calOuvert));
+    b.title = reglages.calOuvert ? 'Replier le calendrier des évènements' : 'Dérouler le calendrier des évènements';
+    b.setAttribute('aria-label', b.title);
+    let zone = w.querySelector(':scope > .sbp-cal-zone');
+    if (!reglages.calOuvert) { if (zone) zone.remove(); return; }
+    if (!zone) {
+      zone = el('div', 'sbp-cal-zone');
+      zone.setAttribute('data-sbp-cal', '');
+      zone.setAttribute('data-eco-ui', '');
+      w.appendChild(zone);
+      dessinerCalendrier(zone);
+      calLire(false);
+    } else if (redessiner) dessinerCalendrier(zone);
+  }
+  setInterval(function () {
+    if (document.hidden || !reglages.calendrier || !reglages.calOuvert || !document.querySelector('.sbp-cal-zone')) return;
+    if (Date.now() - cal.t > 10 * 60000) calLire(true);
+  }, 60000);
+  (function stylesCalendrier() {
+    const st = document.createElement('style');
+    st.setAttribute('data-sbp-cal-style', '');
+    st.textContent = [
+      '#app .widget[data-sbp-cal-widget]{position:relative}',
+      '#app .widget[data-sbp-cal-widget]>h2{padding-right:44px!important}',
+      '.widget>.sbp-cal-zone{padding:2px 12px 12px 15px;font-size:13px;user-select:none}',
+      '.sbp-cal-tete{display:flex;align-items:center;gap:2px;margin-bottom:6px}',
+      '.sbp-cal-titre{flex:1;text-align:center;font-weight:700;border:0;background:none;color:inherit;cursor:pointer;padding:3px 0;border-radius:5px;font-size:13px}',
+      '.sbp-cal-titre:hover{background:rgba(127,127,127,.15)}',
+      '.sbp-cal-nav{width:24px;height:24px;border:0;border-radius:5px;background:transparent;color:inherit;cursor:pointer;font:600 14px/1 system-ui,sans-serif;padding:0;flex:none}',
+      '.sbp-cal-nav:hover:not([disabled]){background:rgba(127,127,127,.18)}',
+      '.sbp-cal-nav[disabled]{opacity:.25;cursor:default}',
+      '.sbp-cal-relire{font-size:13px;margin-left:4px;opacity:.7}',
+      '.sbp-cal-grille{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}',
+      '.sbp-cal-js{text-align:center;font-size:10.5px;font-weight:700;opacity:.5;padding:2px 0}',
+      '@media (hover:none),(max-width:640px){.sbp-cal-j{height:38px!important;font-size:13px!important}.sbp-cal-nav{width:38px!important;height:38px!important}.sbp-cal-titre{min-height:38px}.sbp-cal-evt{padding:8px 6px!important}}',
+      '.sbp-cal-j{height:28px;border:1px solid transparent;border-radius:6px;background:transparent;color:inherit;cursor:pointer;padding:0;font-size:12px;opacity:.8}',
+      '.sbp-cal-j:hover{border-color:var(--line-color,var(--button-color,#ffb840));opacity:1}',
+      '.sbp-cal-j.sbp-cal-avant{opacity:.45}',
+      '.sbp-cal-j.sbp-cal-plein{opacity:1;font-weight:700;color:#fff;background:var(--line-color,var(--button-color,#ffb840))}',
+      '.sbp-cal-j.sbp-cal-plein.sbp-cal-avant{opacity:.55}',
+      '.sbp-cal-j.sbp-cal-auj{text-decoration:underline;text-underline-offset:2px;border-color:rgba(127,127,127,.55)}',
+      '.sbp-cal-j.sbp-cal-sel{box-shadow:inset 0 0 0 2px var(--text-color,currentColor)}',
+      'html[data-theme=lemon] .sbp-cal-j.sbp-cal-plein{color:#000}',
+      '.sbp-cal-liste{margin-top:8px;border-top:1px solid rgba(127,127,127,.3);padding-top:6px}',
+      '.sbp-cal-sous{font-size:11px;font-weight:700;opacity:.6;margin:0 0 4px}',
+      '.sbp-cal-sous::first-letter{text-transform:uppercase}',
+      '.sbp-cal-evt{display:flex;flex-direction:column;gap:1px;padding:4px 6px;border-radius:6px;margin-bottom:2px}',
+      '.sbp-cal-evt:hover{background:rgba(127,127,127,.12)}',
+      '.sbp-cal-nom{display:block;margin:0!important;padding:0!important;font-weight:700;color:inherit;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+      'a.sbp-cal-nom:hover{text-decoration:underline}',
+      '.sbp-cal-quand{font-size:11.5px;opacity:.7;display:flex;align-items:center;gap:6px}',
+      '.sbp-cal-badge{font-size:10px;font-weight:700;padding:0 6px;border-radius:8px;color:#fff;background:var(--line-color,#e94560);opacity:1}',
+      '.sbp-cal-passe{opacity:.55}',
+      '.sbp-cal-vide{font-size:12px;opacity:.6;padding:2px 6px}',
+      '.sbp-cal-erreur{color:#e05555;opacity:.9}',
     ].join('\n');
     (document.head || document.documentElement).appendChild(st);
   })();
 
   (function surveillerFavoris() {
     let prevu = false;
-    const passe = function () { prevu = false; majFavoris(); };
+    const passe = function () { prevu = false; majFavoris(); majCalendrier(); };
     new MutationObserver(function (ms) {
       if (prevu) return;
       for (let i = 0; i < ms.length; i++) {
         const t = ms[i].target;
         const e = t.nodeType === 1 ? t : t.parentElement;
-        if (e && e.closest && e.closest('[data-sbp-fav]')) continue;
+        if (e && e.closest && e.closest('[data-sbp-fav], [data-sbp-cal]')) continue;
         prevu = true;
         requestAnimationFrame(passe);
         return;
@@ -54350,7 +54717,7 @@
 })();
   } });
 
-  ECO_MODULES.push({ id: "fil", nom: "Fil+", version: "0.35", desc: "Écrire dans le Fil, pages numérotées, modifier / supprimer ses posts, recherche (Fil et mini-blogs), suivre des blogs (alertes avec Notifications+).", debut: "idle", page: true, reglages: true, code: function (window, history) {
+  ECO_MODULES.push({ id: "fil", nom: "Fil+", version: "0.37", desc: "Écrire dans le Fil, pages numérotées, modifier / supprimer ses posts, recherche (Fil et mini-blogs), suivre des blogs (alertes avec Notifications+).", debut: "idle", page: true, reglages: true, code: function (window, history) {
     const { setTimeout, setInterval, requestAnimationFrame, requestIdleCallback, MutationObserver, IntersectionObserver, ResizeObserver } = (typeof ecoMesures === 'function' ? ecoMesures : (window.__ecoMesures || function () { return window; }))("fil");
 (function () {
   'use strict';
@@ -54893,7 +55260,9 @@
     function item(p) {
       const id = +p.id;
       const a = auteur(p);
-      const attrs = { class: 'miniblog-item-wrapper', key: id };
+
+      const ver = (e.reacVer && e.reacVer[id]) || 0;
+      const attrs = { class: 'miniblog-item-wrapper', key: ver ? id + '-r' + ver : id, 'data-fp-id': String(id) };
       if (e.nouveaux.has(id)) attrs['data-fp-injecte'] = String(id);
       if (e.edition === id) {
         return e.cv('div', attrs, [e.cv(e.P, {
@@ -54902,7 +55271,27 @@
         })]);
       }
       const moi = e.moi && norm(a) === norm(e.moi);
-      return e.cv('div', attrs, [e.cv(e.M, { title: String(p.title || ''), author: a, content: String(p.content || ''), date: String(p.created_at || '') }, moi ? actions(p) : null)]);
+
+      return e.cv('div', attrs, [e.cv(e.M, { title: String(p.title || ''), author: a, content: String(p.content || ''), date: String(p.created_at || ''), post: p, kind: 'miniblog' }, moi ? actions(p) : null)]);
+    }
+
+    if (!e.ecouteReac) {
+      e.ecouteReac = true;
+      document.addEventListener('click', function (ev) {
+        const t = ev.target && ev.target.closest ? ev.target : null;
+        const w = t && t.closest('[data-fp-id]');
+        if (!w || !t.closest('.reaction-btn, .reaction-menu-item, .custom-reaction-actions button')) return;
+        const id = +w.getAttribute('data-fp-id');
+        if (!id) return;
+        [900, 2200].forEach(function (d) {
+          setTimeout(function () {
+            if (document.querySelector('[data-fp-id="' + id + '"] .overlay')) return;
+            e.reacVer = e.reacVer || {};
+            e.reacVer[id] = (e.reacVer[id] || 0) + 1;
+            maj();
+          }, d);
+        });
+      }, true);
     }
     function liste(t) {
       for (let i = 0; i < t.children.length; i++) {
@@ -55092,6 +55481,33 @@
   document.addEventListener('fp-resultat', function () {
     try { resultatPont = JSON.parse(html.getAttribute('data-fp-resultat') || 'null'); } catch (x) { resultatPont = null; }
     majBarreRecherche();
+    revenirPageFil();
+  });
+
+  const CLE_PAGE_ONGLET = 'nanachan-fil-plus-page-onglet';
+  function fixPageActu() { return !html.hasAttribute('data-eco-sans-fix-pageactu'); }
+  function actualisee() {
+    try { const n = performance.getEntriesByType('navigation')[0]; if (n) return n.type === 'reload'; } catch (x) {  }
+    try { return !!performance.navigation && performance.navigation.type === 1; } catch (x) { return false; }
+  }
+  let pageARouvrir = (function () {
+    let a = null;
+    try { a = JSON.parse(sessionStorage.getItem(CLE_PAGE_ONGLET) || 'null'); sessionStorage.removeItem(CLE_PAGE_ONGLET); } catch (x) { return 0; }
+    if (!a || a.chemin !== location.pathname || !(a.page > 1) || !actualisee() || Date.now() - (a.t || 0) > 12 * 3600 * 1000) return 0;
+    return a.page;
+  })();
+  function revenirPageFil() {
+    if (!pageARouvrir || !surFil() || !resultatPont || resultatPont.actif) return;
+    const n = pageARouvrir;
+    pageARouvrir = 0;
+    if (resultatPont.page !== n && n <= (resultatPont.pages || 1)) ordre({ a: 'page', page: n });
+  }
+  window.addEventListener('pagehide', function () {
+    try {
+      const r = resultatPont;
+      if (fixPageActu() && surFil() && r && !r.actif && r.page > 1) sessionStorage.setItem(CLE_PAGE_ONGLET, JSON.stringify({ chemin: location.pathname, page: r.page, t: Date.now() }));
+      else sessionStorage.removeItem(CLE_PAGE_ONGLET);
+    } catch (x) {  }
   });
   document.addEventListener('np-test-fil', majPastilleNav);
   document.addEventListener('fp-publie', function () {
@@ -55379,6 +55795,23 @@
     if (b.title !== t) b.title = t;
   }
 
+  const vusRepose = new Map();
+  function noterRepose(k, it) {
+    const t = Date.now();
+    const v = vusRepose.get(k) || { el: null, n: 0, t0: t };
+    if (v.el === it) return;
+    if (t - v.t0 > 10000) { v.n = 0; v.t0 = t; }
+    v.el = it; v.n++;
+    vusRepose.set(k, v);
+    if (v.n === 3) {
+      try {
+        const l = JSON.parse(sessionStorage.getItem('nanachan-fil-plus-diag') || '[]');
+        l.push(new Date().toLocaleTimeString('fr-FR') + ' ' + location.pathname + ' · billet « ' + k.split('|').slice(1).join('|').slice(0, 40) + ' » refait ' + v.n + ' fois en 10 s');
+        sessionStorage.setItem('nanachan-fil-plus-diag', JSON.stringify(l.slice(-12)));
+      } catch (x) {  }
+    }
+  }
+
   let nouveauxVisite = new Set();
   function noterNouveauxVisite() {
     nonLusDe(lireEtat()).forEach(function (p) { nouveauxVisite.add(cleItem(p.auteur, p.titre)); });
@@ -55394,7 +55827,10 @@
       const k = cleItem(auteur, titre);
       if (!proprietaire) piedItem(it, auteur);
       const s = !!suivi(auteur);
-      if (s !== it.hasAttribute('data-fp-suivi')) it.toggleAttribute('data-fp-suivi', s);
+      if (s !== it.hasAttribute('data-fp-suivi')) {
+        it.toggleAttribute('data-fp-suivi', s);
+        if (s) noterRepose(k, it);
+      }
       const nouveau = nouveauxVisite.has(k) || !!it.closest('[data-fp-injecte]');
       if (nouveau !== it.hasAttribute('data-fp-nouveau')) it.toggleAttribute('data-fp-nouveau', nouveau);
       const p = parCle.get(k);
@@ -55896,9 +56332,29 @@
     const liste = Array.prototype.slice.call(m.addedNodes).concat(Array.prototype.slice.call(m.removedNodes));
     return liste.length > 0 && liste.every(function (n) { return n.nodeType === 1 && (n.hasAttribute('data-fp-ui') || n.hasAttribute('data-fp-message')); });
   }
+
+  function billetAjoute(m) {
+    for (let j = 0; j < m.addedNodes.length; j++) {
+      const n = m.addedNodes[j];
+      if (n.nodeType !== 1) continue;
+      if (n.classList.contains('miniblog-item') || (n.firstElementChild && n.getElementsByClassName('miniblog-item').length)) return true;
+    }
+    return false;
+  }
+  let dansTout = false;
   function demarrer() {
     new MutationObserver(function (ms) {
-      for (let i = 0; i < ms.length; i++) if (!nosAjouts(ms[i])) { planifier(); return; }
+      let autre = false;
+      for (let i = 0; i < ms.length; i++) {
+        if (nosAjouts(ms[i])) continue;
+        if (!dansTout && billetAjoute(ms[i])) {
+          dansTout = true;
+          try { clearTimeout(minuteur); minuteur = 0; tout(); } finally { dansTout = false; }
+          return;
+        }
+        autre = true;
+      }
+      if (autre) planifier();
     }).observe(document.body, { childList: true, subtree: true });
     tout();
   }
@@ -62061,6 +62517,9 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
 
       const u = JSON.parse(sessionStorage.getItem('nanachan-uploads-plus-diag') || '[]');
       if (u.length) { l.push(''); l.push('Uploads+ (derniers envois, cet onglet) :'); u.forEach(function (x) { l.push('  ' + x); }); }
+
+      const f = JSON.parse(sessionStorage.getItem('nanachan-fil-plus-diag') || '[]');
+      if (f.length) { l.push(''); l.push('Fil+ (billets refaits par le site, cet onglet) :'); f.forEach(function (x) { l.push('  ' + x); }); }
     } catch (e) {  }
 
     try {
@@ -63470,15 +63929,15 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
       bug: 'Un lien du forum en « www.nanachannel.moe » (ou sans www) mène à une autre adresse, où l\'on arrive déconnecté ; et ces liens s\'ouvrent dans un nouvel onglet.',
       fix: 'Tout lien vers le forum, partout dans la page, est ramené sur l\'adresse de l\'onglet au moment du clic (clic, clic molette, Ctrl + clic, clic droit). Clic simple = même onglet (descend au post s\'il est dans la page) ; Ctrl / clic molette : nouvel onglet, connecté. Les liens copiés (« Copier le lien », Ctrl+C) sont aussi corrigés.' },
 
-    { id: 'pageActu', defaut: true, attr: 'pageactu', module: 'pages', nom: 'Rester sur la même page à l\'actualisation',
-      bug: 'En page 2, 3, 4… de la liste des sujets ou d\'un topic, actualiser la page (F5) ramène en page 1 : le site ne garde pas la page dans l\'adresse.',
-      fix: 'Chaque onglet retient sa page (et, dans un topic, le message en haut de l\'écran) ; à l\'actualisation, la même liste ou le même topic rouvre cette page. Rien ne change pour les liens ni pour les autres onglets. Pas en « Sans pages », ni après une recherche ou un filtre.' },
+    { id: 'pageActu', defaut: true, attr: 'pageactu', module: null, nom: 'Rester sur la même page à l\'actualisation',
+      bug: 'Actualiser (F5) en page 2, 3, 4… ramène en page 1 : liste des sujets, Fil, mini-blogs, historique de modération, discussions privées, évènements. (Les topics gardent leur page dans l\'adresse depuis la 1.3.5a.)',
+      fix: 'Chaque onglet retient la page où il était ; après F5, la même page est rouverte : directement pour la liste des sujets (Pages+) et le Fil (Fil+), en avançant avec « Page suivante » du site pour les autres pages. Topics en « Sans pages » : retour au message où on était. Rien ne change pour les liens ni pour les autres onglets ; pas après une recherche ou un filtre ; un clic ou une touche arrête le retour.' },
     { id: 'rika', defaut: true, attr: 'rika', module: null, nom: 'Page d\'accueil (mise en page)',
       bug: 'L\'image de Rika change de taille avec la fenêtre : énorme, elle passe sur le texte et sort du cadre ; minuscule en fenêtre étroite.',
       fix: 'Haut de l\'accueil en une colonne (titre, écrito, description, Rika, bouton) ; Rika en taille fixe ×2, ou ×1 en fenêtre étroite.' },
     { id: 'banniere', defaut: true, attr: 'banniere', module: null, nom: 'Bannière d\'évènement continue',
       bug: 'Le texte de la bannière « ÉVÉNEMENT » défile jusqu\'à sortir entièrement : la bannière reste vide un moment, puis le texte réapparaît d\'un coup. Avec un nom court, il y a aussi des trous entre deux passages.',
-      fix: 'Le nom est répété autant qu\'il faut pour remplir la bannière et le défilement boucle sans coupure, à vitesse constante (60 px par seconde) quelle que soit la longueur du nom. « Aperçu » affiche une bannière d\'essai à sa place dans la liste des sujets, avec le texte de ton choix.' },
+      fix: 'Le nom est répété autant qu\'il faut pour remplir la bannière et le défilement boucle sans coupure, à la vitesse du forum ; il s\'arrête sous la souris (pour lire ou cliquer). « Aperçu » affiche une bannière d\'essai à sa place dans la liste des sujets, avec le texte de ton choix.' },
   ];
   function ecoFixActif(id) {
     const f = ecoReglages.tweaks && ecoReglages.tweaks.fixes;
@@ -63497,7 +63956,7 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
   ecoAppliquerFixes();
   document.addEventListener('DOMContentLoaded', ecoAppliquerFixes, { once: true });
 
-  const ECO_BN_VITESSE = 60;
+  const ECO_BN_DUREE_SITE = 18;
   function ecoBanniereMaj() {
     const actif = ecoFixActif('banniere');
     document.querySelectorAll('.event-banner').forEach(function (b) {
@@ -63538,11 +63997,59 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
       }
       const w = groupes[0].offsetWidth;
       if (!w) return;
-      const dur = (w / ECO_BN_VITESSE).toFixed(2) + 's';
+      const w0 = modeles.reduce(function (t, m) { return t + m.offsetWidth; }, 0);
+      if (!w0) return;
+      const dur = (w * ECO_BN_DUREE_SITE / (2 * w0)).toFixed(2) + 's';
       if (piste.style.getPropertyValue('--eco-bn-dur') !== dur) piste.style.setProperty('--eco-bn-dur', dur);
     });
   }
   setInterval(function () { if (!document.hidden && document.querySelector('.event-banner')) ecoBanniereMaj(); }, 1000);
+
+  const ECO_PAGE_VUE_SORTIE = 'eco-page-vue-sortie';
+  function ecoPageVueLue() { try { return JSON.parse(sessionStorage.getItem('eco-page-vue') || 'null'); } catch (e) { return null; } }
+  function ecoPageVueGeree() {
+    const c = location.pathname;
+    if (/^\/fil\/?$/.test(c)) return !!(ecoReglages.modules && ecoReglages.modules.fil === false);
+    return /^\/(moderation|messages|events)\/?$/.test(c) || /^\/miniblog\/[^/]+\/?$/.test(c);
+  }
+  window.addEventListener('pagehide', function () {
+    try {
+      const v = ecoPageVueLue();
+      const recherche = document.querySelector('#app input[placeholder="Rechercher..."]');
+      if (ecoFixActif('pageActu') && ecoPageVueGeree() && v && v.chemin === location.pathname && v.page > 1 &&
+          !(recherche && recherche.value.trim()) && !document.querySelector('[data-fp-liste]')) {
+        sessionStorage.setItem(ECO_PAGE_VUE_SORTIE, JSON.stringify({ chemin: v.chemin, page: v.page, t: Date.now() }));
+      } else sessionStorage.removeItem(ECO_PAGE_VUE_SORTIE);
+    } catch (e) {  }
+  });
+  (function ecoPageVueRevenir() {
+    let a = null;
+    try { a = JSON.parse(sessionStorage.getItem(ECO_PAGE_VUE_SORTIE) || 'null'); sessionStorage.removeItem(ECO_PAGE_VUE_SORTIE); } catch (e) { return; }
+    if (!a || a.chemin !== location.pathname || !(a.page > 1) || Date.now() - (a.t || 0) > 12 * 3600 * 1000) return;
+    let recharge = false;
+    try { const n = performance.getEntriesByType('navigation')[0]; recharge = n ? n.type === 'reload' : performance.navigation.type === 1; } catch (e) { return; }
+    if (!recharge || !ecoFixActif('pageActu') || !ecoPageVueGeree()) return;
+    const debut = Date.now();
+    let arret = false, pas = 0;
+    const stop = function (e) { if (e.isTrusted) arret = true; };
+    window.addEventListener('pointerdown', stop, true);
+    window.addEventListener('keydown', stop, true);
+    const fin = function () { window.removeEventListener('pointerdown', stop, true); window.removeEventListener('keydown', stop, true); };
+    (function etape() {
+      if (arret || location.pathname !== a.chemin || Date.now() - debut > 30000 || pas > 40) { fin(); return; }
+      const v = ecoPageVueLue();
+      const lue = v && v.chemin === a.chemin && v.t >= debut ? v.page : 0;
+      if (lue >= a.page) { fin(); return; }
+      const suiv = Array.prototype.find.call(document.querySelectorAll('#app button.page-nav-btn[title="Page suivante"]'), function (b) {
+        return !b.closest('[data-pp], [data-fp-ui], [data-eco-ui]') && b.offsetParent !== null;
+      });
+      if (!lue || !suiv || suiv.disabled || etape.attendue === lue + 1) { setTimeout(etape, 120); return; }
+      etape.attendue = lue + 1;
+      pas++;
+      suiv.click();
+      setTimeout(etape, 120);
+    })();
+  })();
   document.addEventListener('eco-fix-change', function (e) { if (e.detail === 'banniere') ecoBanniereMaj(); });
   window.addEventListener('resize', function () { if (document.querySelector('.event-banner')) ecoBanniereMaj(); });
 
@@ -64152,6 +64659,19 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
     });
   }
   setInterval(function () { if (ecoMenuTopicActif() || document.querySelector('.eco-mt, [data-eco-mt-sans]')) ecoMTPoser(); }, 800);
+
+  function ecoMTRelire() {
+    const barre = document.querySelector('.eco-mt');
+    const id = location.pathname.split('/')[2] || '';
+    if (!barre || !/^\d+$/.test(id) || !ecoMenuTopicActif()) return;
+    fetch('/nanachannel/topics/' + id + '/fav/', { credentials: 'include', headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        if (!j || typeof j.is_favorite !== 'boolean' || ecoMT.cle !== id || ecoMT.occupe) return;
+        if (ecoMT.fav !== j.is_favorite) { ecoMT.fav = j.is_favorite; ecoMTPeindre(document.querySelector('.eco-mt')); }
+      }).catch(function () {  });
+  }
+  document.addEventListener('eco-favoris-change', function () { setTimeout(ecoMTRelire, 700); });
 
   document.addEventListener('click', function (e) {
     const it = e.target && e.target.closest && e.target.closest('#topic-top .dropdown-item');
@@ -64795,6 +65315,7 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
       const open0 = XP.open, send0 = XP.send;
       XP.open = function (methode, url) {
         this._ecoPorte = String(methode).toUpperCase() === 'GET' && estPosts(url);
+        if (String(methode).toUpperCase() === 'GET') noterPageVue(this, url);
         if (this._ecoPorte && !this._ecoPorteEcoute) {
           this._ecoPorteEcoute = true;
           this.addEventListener('loadend', function () { if (this.status === 429) bloquer(); });
@@ -64810,6 +65331,29 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
         quandLibre('site').then(function () { try { send0.apply(xhr, args); } catch (e) {  } });
         return undefined;
       };
+    }
+
+    const VUES_PAGES = [
+      [/^\/moderation\/?$/, /\/nanachannel\/loadlogs\/?$/],
+      [/^\/fil\/?$/, /\/nanachannel\/miniblog\/all\/?$/],
+      [/^\/messages\/?$/, /\/nanachannel\/mp\/conversations\/?$/],
+      [/^\/events\/?$/, /\/nanachannel\/events\/upcoming\/?$/],
+    ];
+    function noterPageVue(xhr, url) {
+      const x = chemin(url);
+      if (!x) return;
+      const ici = location.pathname;
+      let ok = VUES_PAGES.some(function (v) { return v[0].test(ici) && v[1].test(x.pathname); });
+      if (!ok) {
+        const m = ici.match(/^\/miniblog\/([^/]+)\/?$/);
+        ok = !!m && new RegExp('^/nanachannel/miniblog/' + m[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '/?$', 'i').test(x.pathname) && !/\/(all|posts)\/?$/.test(x.pathname);
+      }
+      if (!ok) return;
+      const page = parseInt(x.searchParams.get('page'), 10) || 1;
+      xhr.addEventListener('load', function () {
+        if (xhr.status !== 200 || location.pathname !== ici) return;
+        try { sessionStorage.setItem('eco-page-vue', JSON.stringify({ chemin: ici, page: page, t: Date.now() })); } catch (e) {  }
+      });
     }
     window.__ecoPorte = { attente: attente };
   } };
@@ -65031,6 +65575,8 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
 
       'html:not([data-eco-sans-fix-banniere]) .event-banner-track{animation:eco-banniere var(--eco-bn-dur,18s) linear infinite!important}',
       'html:not([data-eco-sans-fix-banniere]) .event-banner-group{flex:0 0 auto!important;white-space:nowrap}',
+
+      'html:not([data-eco-sans-fix-banniere]) .event-banner:hover .event-banner-track{animation-play-state:paused!important}',
       '@keyframes eco-banniere{from{transform:translateX(0)}to{transform:translateX(-50%)}}',
       '@keyframes eco-banniere-site{from{transform:translateX(0)}to{transform:translateX(-100%)}}',
 
@@ -66506,7 +67052,7 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
         appliquer: function () { ecoAppliquerAlertes(); } },
 
       { id: 'widgetsRetract', groupe: 'page', module: 'shitbox', nom: 'Widgets rétractables',
-        desc: 'Petits boutons au-dessus de Connectés, Favoris, Historique de modération et Shitbox : » pour les replier (animé, la flèche indique le sens), et placement à droite ou en dessous (fenêtre large ; en fenêtre étroite, toujours en dessous). À droite, ils suivent le défilement de la page. Repliés à droite : une bulle « pour les rouvrir.',
+        desc: 'Petits boutons au-dessus de Connectés, Favoris, Historique de modération, Événements et Shitbox : » pour les replier (animé, la flèche indique le sens), et placement à droite ou en dessous (fenêtre large ; en fenêtre étroite, toujours en dessous). À droite, ils suivent le défilement de la page. Repliés à droite : une bulle « pour les rouvrir.',
         appliquer: function () { ecoAppliquerSansFab(); ecoWidgetsPoser(); } },
 
       { id: 'pseudosListe', groupe: 'page', nom: 'Pseudos cliquables (liste des sujets et Fil)',
@@ -66517,7 +67063,7 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
         appliquer: function () { ecoDrapPoser(); } },
 
       { id: 'menuTopic', groupe: 'page', nom: 'Favoris et lien à côté du ⋮ (haut d\'un topic)',
-        desc: 'En haut d\'un topic, une étoile (ajouter / retirer des favoris, jaune quand le topic y est) et une chaîne (copier le lien), sur la même ligne que le ⋮. Ils passent par le menu du forum : même effet.',
+        desc: 'En haut d\'un topic, une étoile (ajouter / retirer des favoris, jaune quand le topic y est) et une chaîne (copier le lien), sur la même ligne que le ⋮, avec une petite animation. Ils passent par le menu du forum : même effet. L\'étoile suit aussi les favoris changés ailleurs (★ de Widgets+ ou de l\'Explorateur) ; un favori ajouté ou retiré ici apparaît tout de suite dans Widgets+ et Notifications+.',
         appliquer: function () { ecoMT.cle = ''; ecoMTPoser(); } },
       { id: 'sansFab', groupe: 'page', nom: 'Masquer le bouton ✎ du forum',
         desc: 'Bouton rond ✎ du forum en fenêtre étroite (il gêne les flèches de Navigation+ et la pastille de Messages+).',
