@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Nanachannel ECO+
 // @namespace    nanachannel-eco-plus
-// @version      0.9.367
+// @version      0.9.368
 // @downloadURL  https://github.com/Pompokov/nanachannel-eco-plus/raw/refs/heads/main/nanachannel-eco.user.js
 // @updateURL    https://github.com/Pompokov/nanachannel-eco-plus/raw/refs/heads/main/nanachannel-eco.user.js
 // @description  Nanachannel ECO+ : tous les modules réunis (Actualisation+, Blacklist+, Citations+, Fil+, Images+, Liens+, Messages+, MP+, Navigation+, Notifications+, Pages+, Profil+, Réactions+, Recherche+, Sondage+, Thèmes+, Uploads+, Vocaroo+, Widgets+), activables dans le menu ECO+ sous la bannière.
@@ -61,7 +61,7 @@
 // ==/UserScript==
 (function () {
   'use strict';
-  const ECO_VERSION = "0.9.367";
+  const ECO_VERSION = "0.9.368";
   const ECO_MODULES = [];
 
   function ecoMesuresUsine(W, mods, ecoute) {
@@ -38656,7 +38656,7 @@
 })();
   } });
 
-  ECO_MODULES.push({ id: "shitbox", nom: "Widgets+", version: "0.31", desc: "Widgets rétractables (placement à droite / en dessous), Favoris (liste / grille, dossiers ; widget et Notifications+), calendrier des évènements et Shitbox (pubs au clic, défilement réglable).", debut: "idle", page: false, reglages: true, code: function (GM_getValue, GM_setValue, GM_info) {
+  ECO_MODULES.push({ id: "shitbox", nom: "Widgets+", version: "0.32", desc: "Widgets rétractables (placement à droite / en dessous), Favoris (liste / grille, dossiers, ✎ Mes topics ; widget et Notifications+), calendrier des évènements et Shitbox (pubs au clic, défilement réglable).", debut: "idle", page: false, reglages: true, code: function (GM_getValue, GM_setValue, GM_info) {
     const { setTimeout, setInterval, requestAnimationFrame, requestIdleCallback, MutationObserver, IntersectionObserver, ResizeObserver } = (typeof ecoMesures === 'function' ? ecoMesures : (window.__ecoMesures || function () { return window; }))("shitbox");
     let sbpDefil = 0;
     let sbpVu = true, sbpVuCible = null, sbpVuObs = null;
@@ -38782,6 +38782,7 @@
 
   let reglages = Object.assign({}, DEFAUTS, GM_getValue('reglages', {}) || {});
 
+  if (reglages.favFiltres && reglages.favFiltres.mes) { reglages.favFiltres.mes = false; }
   if (!reglages.favMesAuto022) {
     if (reglages.favMesAuto === 'creation') reglages.favMesAuto = 'tous';
     reglages.favMesAuto022 = true;
@@ -39650,32 +39651,12 @@
     titre.appendChild(el('small', null, 'Widgets+ v' + VERSION));
     menu.appendChild(titre);
 
-    menu.appendChild(ligneCase('Favoris : Explorateur', 'favoris', 'Bouton ▾ sur le widget Favoris : tes sujets favoris du site façon Explorateur (dossiers, Liste / Détails / Grille, tri, filtres, recherche, sélection de plusieurs sujets, clic droit ou ⋯ = menu) ; ⤢ l\'ouvre en grand (aussi « 📁 Ranger mes favoris » de Notifications+). « Retirer » enlève vraiment le sujet de tes favoris du site (« Annuler » quelques secondes).', function () { majFavoris(); redessinerFavoris(); }));
+    menu.appendChild(ligneCase('Favoris : Explorateur', 'favoris', 'Bouton ▾ sur le widget Favoris : tes sujets favoris du site façon Explorateur (dossiers, Liste / Grille, tri, filtres, recherche ; 📁 ranger, ★ retirer) ; dossier « ✎ Mes topics » = tous les topics que tu as créés, en favoris ou non (☆ pour en mettre un en favoris) ; ⤢ l\'ouvre en grand (aussi « 📁 Ranger mes favoris » de Notifications+). « Retirer » enlève vraiment le sujet de tes favoris du site (« Annuler » quelques secondes).', function () { majFavoris(); redessinerFavoris(); }));
 
     menu.appendChild(ligneCase('Calendrier des évènements', 'calendrier', 'Bouton ▾ sur le widget Événements : le mois en calendrier (jours avec un évènement en couleur, clic sur un jour = ses évènements) et les prochains évènements, avec un lien vers leur topic. Le titre « Événements » mène toujours à la page du forum.', function () { majCalendrier(); }));
 
     menu.appendChild(ligneCase('Titre « Favoris » : ouvrir en grand', 'favTitreFenetre', 'Clic sur le titre « Favoris » du widget : l\'Explorateur des favoris en grand, au lieu de la page des favoris du site (Ctrl + clic ou clic du milieu : la page, comme avant).'));
 
-    const ligneMes = el('div', 'sbp-ligne');
-    ligneMes.appendChild(el('span', 'sbp-nom', 'Mes topics en favoris'));
-    const segMes = el('div', 'eco-segments');
-    segMes.setAttribute('role', 'radiogroup');
-    [['tous', 'Tous', 'Tous tes topics (anciens et nouveaux) sont ajoutés à tes favoris du site ; un topic que tu retires des favoris n\'est jamais remis'], ['creation', 'À la création', 'Seulement les topics que tu crées à partir de maintenant'], ['non', 'Non', 'Rien d\'automatique']].forEach(function (o) {
-      const b = el('button', null, o[1]);
-      b.type = 'button';
-      b.setAttribute('role', 'radio');
-      b.title = o[2];
-      b.setAttribute('aria-checked', String((reglages.favMesAuto || 'tous') === o[0]));
-      b.addEventListener('click', function () {
-        reglages.favMesAuto = o[0]; enregistrerReglages();
-        segMes.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-checked', String(x === b)); });
-        favMesRefus = false; verifierMesTopicsAuto(); redessinerFavoris();
-      });
-      segMes.appendChild(b);
-    });
-    ligneMes.appendChild(segMes);
-    menu.appendChild(ligneMes);
-    menu.appendChild(el('div', 'sbp-note', 'Tes topics = ceux que Notifications+ connaît (son réglage « Suivre mes topics »). Un de tes topics que tu retires des favoris n\'est jamais remis.'));
     menu.appendChild(ligneCase('Shitbox+ : pubs au clic et défilement', 'actif', 'Décoché : la Shitbox du forum telle quelle (recharge la page pour appliquer)', function () { setTimeout(redessinerMenu, 0); }));
     if (reglages.actif === false) {
       menu.appendChild(el('div', 'sbp-note', 'Shitbox+ éteinte : la Shitbox du forum reste telle quelle. Recharge la page si elle était déjà en place.'));
@@ -40452,7 +40433,7 @@
     reglages.favFiltres = f;
     return f;
   }
-  function nbFiltres() { const f = filtresFav(); return (f.nouveaux ? 1 : 0) + (f.mes ? 1 : 0) + (f.roses ? 1 : 0) + f.tags.length; }
+  function nbFiltres(mesVue) { const f = filtresFav(); return (f.nouveaux ? 1 : 0) + (mesVue && f.hors ? 1 : 0) + (f.roses ? 1 : 0) + f.tags.length; }
   function deplacer(ids, d) { ids.forEach(function (id) { rangerDans(id, d); }); apresChangementDossiers(); }
   function deposer(e, d) {
     if (!favGlisse) return;
@@ -40497,6 +40478,7 @@
     const courant = reglages[cleDossier(ctx)] || '';
     const n = favListe ? favListe.length : 0;
     const l = [{ texte: '⭐ Tous les favoris (' + n + ')', actif: !courant, action: function () { reglages[cleDossier(ctx)] = ''; enregistrerReglages(); dessinerFavorisDans(zone); } }];
+    l.push({ texte: '✎ Mes topics' + (mesT || favListe ? ' (' + listeMesTopics().length + ')' : ''), actif: courant === MES_DOSSIER, action: function () { reglages[cleDossier(ctx)] = MES_DOSSIER; enregistrerReglages(); dessinerFavorisDans(zone); } });
     favDossiers.dossiers.forEach(function (d) {
       l.push({ texte: '📁 ' + d.nom + ' (' + d.ids.length + ')', actif: courant === d.id, action: function () { reglages[cleDossier(ctx)] = d.id; enregistrerReglages(); dessinerFavorisDans(zone); } });
     });
@@ -40562,6 +40544,9 @@
     let vue = reglages[cleVue(ctx)];
     if (!VUES_FAV.some(function (v) { return v[0] === vue; })) vue = 'liste';
     const dCourant = favDossiers.dossiers.filter(function (d) { return d.id === reglages[cleDossier(ctx)]; })[0] || null;
+    const mesVue = reglages[cleDossier(ctx)] === MES_DOSSIER;
+    if (mesVue) { const lec = lireMesTopics(false); if (lec) lec.then(redessinerFavoris, redessinerFavoris); }
+    const allerMes = function () { reglages[cleDossier(ctx)] = MES_DOSSIER; enregistrerReglages(); dessinerFavorisDans(zone); };
     const S = selDe(ctx);
     if (favListe) S.forEach(function (id) { if (!favListe.some(function (f) { return f.id === id; })) S.delete(id); });
     if (!S.size) favDoigt[ctx] = false;
@@ -40572,7 +40557,7 @@
     if (ctx === 'fenetre') {
       const volet = el('nav', 'sbp-fav-volet');
       const ligneVolet = function (texte, nb, d) {
-        const b = bouton('sbp-fav-volet-ligne' + ((d ? d.id : '') === (dCourant ? dCourant.id : '') ? ' sbp-actif' : ''), '', d ? 'Dossier « ' + d.nom + ' » (clic droit : renommer / supprimer ; glisse des sujets ici pour les y ranger)' : 'Tous les favoris (glisse des sujets ici pour les sortir de leur dossier)', function () { reglages[cleDossier(ctx)] = d ? d.id : ''; enregistrerReglages(); redessiner(); });
+        const b = bouton('sbp-fav-volet-ligne' + ((d ? dCourant && d.id === dCourant.id : !dCourant && !mesVue) ? ' sbp-actif' : ''), '', d ? 'Dossier « ' + d.nom + ' » (clic droit : renommer / supprimer ; glisse des sujets ici pour les y ranger)' : 'Tous les favoris (glisse des sujets ici pour les sortir de leur dossier)', function () { reglages[cleDossier(ctx)] = d ? d.id : ''; enregistrerReglages(); redessiner(); });
         b.appendChild(el('span', 'sbp-fav-volet-nom', texte));
         b.appendChild(el('span', 'sbp-fav-volet-nb', String(nb)));
         cibleDepot(b, d);
@@ -40580,6 +40565,12 @@
         volet.appendChild(b);
       };
       ligneVolet('⭐ Favoris', favListe ? favListe.length : 0, null);
+      {
+        const bm = bouton('sbp-fav-volet-ligne sbp-fav-volet-mes' + (mesVue ? ' sbp-actif' : ''), '', 'Tous les topics que tu as créés, en favoris ou non', allerMes);
+        bm.appendChild(el('span', 'sbp-fav-volet-nom', '✎ Mes topics'));
+        bm.appendChild(el('span', 'sbp-fav-volet-nb', mesT || favListe ? String(listeMesTopics().length) : ''));
+        volet.appendChild(bm);
+      }
       favDossiers.dossiers.forEach(function (d) { ligneVolet('📁 ' + d.nom, d.ids.length, d); });
       volet.appendChild(bouton('sbp-fav-volet-ligne sbp-fav-volet-plus', '＋ Nouveau dossier', 'Nouveau dossier', function () { demanderNomDossier('', function (nom) { const d = nouveauDossierFav(nom); reglages[cleDossier(ctx)] = d ? d.id : ''; enregistrerReglages(); apresChangementDossiers(); }); }));
       zone.appendChild(volet);
@@ -40589,16 +40580,20 @@
 
     const adr = el('div', 'sbp-fav-adresse');
     const miette = function (texte, d) {
-      const b = bouton('sbp-fav-miette' + (d === dCourant ? ' sbp-actif' : ''), texte, d ? 'Dossier « ' + d.nom + ' »' : 'Tous les favoris (glisse des sujets ici pour les sortir de leur dossier)', function () { reglages[cleDossier(ctx)] = d ? d.id : ''; enregistrerReglages(); redessiner(); });
+      const b = bouton('sbp-fav-miette' + (d === dCourant && !mesVue ? ' sbp-actif' : ''), texte, d ? 'Dossier « ' + d.nom + ' »' : 'Tous les favoris (glisse des sujets ici pour les sortir de leur dossier)', function () { reglages[cleDossier(ctx)] = d ? d.id : ''; enregistrerReglages(); redessiner(); });
       cibleDepot(b, d);
       return b;
     };
     adr.appendChild(miette('⭐ Favoris', null));
     if (dCourant) { adr.appendChild(el('span', 'sbp-fav-chevron', '›')); adr.appendChild(miette('📁 ' + dCourant.nom, dCourant)); }
+    if (mesVue) { adr.appendChild(el('span', 'sbp-fav-chevron', '›')); adr.appendChild(bouton('sbp-fav-miette sbp-actif', '✎ Mes topics', 'Tous les topics que tu as créés', allerMes)); }
     adr.appendChild(boutonIco('sbp-fav-ico sbp-fav-dossiers', ICO_FAV.chevron, 'Dossiers : aller dans un dossier, en créer, renommer, supprimer', function (b) { ouvrirMenuFav(b, entreesAllerDossier(ctx, zone)); }));
     adr.appendChild(el('span', 'sbp-fav-espace'));
 
-    const rel = boutonIco('sbp-fav-ico', ICO_FAV.relire, 'Relire la liste du site', function (b) { b.disabled = true; relireEtRedessiner(true); });
+    const rel = boutonIco('sbp-fav-ico', ICO_FAV.relire, mesVue ? 'Relire tes topics sur le forum' : 'Relire la liste du site', function (b) {
+      b.disabled = true;
+      if (mesVue) { const lec = lireMesTopics(true); relireEtRedessiner(true); if (lec) lec.then(redessinerFavoris, redessinerFavoris); } else relireEtRedessiner(true);
+    });
     adr.appendChild(rel);
     if (ctx !== 'fenetre') adr.appendChild(boutonIco('sbp-fav-ico', ICO_FAV.agrandir, 'Ouvrir les favoris en grand', function () { ouvrirFenetreFavoris(); }));
     hote.appendChild(adr);
@@ -40626,7 +40621,7 @@
       l.push({ texte: (!reglages.favTriInverse ? '● ' : '○ ') + 'Croissant', action: function () { reglages.favTriInverse = false; enregistrerReglages(); redessinerFavoris(); } });
       l.push({ texte: (reglages.favTriInverse ? '● ' : '○ ') + 'Décroissant', action: function () { reglages.favTriInverse = true; enregistrerReglages(); redessinerFavoris(); } });
       l.push('-');
-      l.push({ texte: (reglages.favGrouper !== false ? '☑ ' : '☐ ') + 'Regrouper : Nouveaux › Mes topics › Favoris', action: function () { reglages.favGrouper = reglages.favGrouper === false; enregistrerReglages(); redessinerFavoris(); } });
+      l.push({ texte: (reglages.favGrouper !== false ? '☑ ' : '☐ ') + 'Regrouper : nouveaux messages en premier', action: function () { reglages.favGrouper = reglages.favGrouper === false; enregistrerReglages(); redessinerFavoris(); } });
       ouvrirMenuFav(b, l);
     });
 
@@ -40639,19 +40634,19 @@
       segVue.appendChild(b);
     });
     cmd.appendChild(segVue);
-    const nf = nbFiltres();
-    const bFil = cmdB(ICO_FAV.filtre, 'Filtrer', nf ? nf + ' filtre(s) actif(s)' : 'Filtrer : nouveaux messages, mes topics, NSFW, tags', function (b) {
+    const nf = nbFiltres(mesVue);
+    const bFil = cmdB(ICO_FAV.filtre, 'Filtrer', nf ? nf + ' filtre(s) actif(s)' : 'Filtrer : nouveaux messages, NSFW, tags' + (mesVue ? ', hors favoris' : ''), function (b) {
       const F = filtresFav();
       const bascule = function (k) { return function () { F[k] = !F[k]; enregistrerReglages(); redessinerFavoris(); setTimeout(function () { const nb = zone.querySelector('.sbp-fav-filtre-btn'); if (nb) nb.click(); }, 0); }; };
       const l = [
         { texte: (F.nouveaux ? '☑ ' : '☐ ') + '🔴 Nouveaux messages', action: bascule('nouveaux') },
-        { texte: (F.mes ? '☑ ' : '☐ ') + '✎ Mes topics', action: bascule('mes') },
 
         { tag: ['NSFW', 'rgb(222,143,215)', '#3b0f36'], nsfw: true, coche: !!F.roses, texte: 'NSFW', action: bascule('roses') },
       ];
+      if (mesVue) l.splice(1, 0, { texte: (F.hors ? '☑ ' : '☐ ') + '☆ Hors favoris', action: bascule('hors') });
       const ti = lireInfosSujets();
       const tags = {};
-      (favListe || []).forEach(function (f) { ((ti[f.id] || {}).g || []).forEach(function (t) { tags[t] = (tags[t] || 0) + 1; }); });
+      (mesVue ? listeMesTopics() : favListe || []).forEach(function (f) { ((ti[f.id] || {}).g || []).forEach(function (t) { tags[t] = (tags[t] || 0) + 1; }); });
 
       const noms = TAGS_FORUM.map(function (t) { return t[0]; });
       Object.keys(tags).concat(F.tags).forEach(function (t) { if (noms.indexOf(t) === -1) noms.push(t); });
@@ -40680,7 +40675,7 @@
       lf.appendChild(el('span', 'sbp-fav-filtres-titre', 'Filtré :'));
       const mots = [];
       if (F.nouveaux) mots.push(['nouveaux', 'Nouveaux']);
-      if (F.mes) mots.push(['mes', 'Mes topics']);
+      if (mesVue && F.hors) mots.push(['hors', 'Hors favoris']);
       if (F.roses) mots.push(['roses', 'NSFW']);
       F.tags.forEach(function (t) { mots.push(['tag:' + t, t]); });
       mots.forEach(function (m) {
@@ -40697,7 +40692,7 @@
       chB.innerHTML = ICO_FAV.loupe;
       const ch = el('input', 'sbp-fav-cherche');
       ch.type = 'search';
-      ch.placeholder = 'Rechercher dans ' + (dCourant ? dCourant.nom : 'les favoris') + '…';
+      ch.placeholder = 'Rechercher dans ' + (mesVue ? 'mes topics' : dCourant ? dCourant.nom : 'les favoris') + '…';
       ch.value = favRecherche[ctx] || '';
       ch.addEventListener('keydown', function (e) { e.stopPropagation(); if (e.key === 'Escape' && ch.value) { e.preventDefault(); ch.value = ''; ch.dispatchEvent(new Event('input')); } });
       ch.addEventListener('input', function () {
@@ -40748,7 +40743,7 @@
 
     const moiP = monPseudoFav();
     const estMien = function (f) {
-      return !!((infos[f.id] && infos[f.id].moi) || (etat && etat.suivis[f.id] && etat.suivis[f.id].moi) ||
+      return !!(f.mien || (infos[f.id] && infos[f.id].moi) || (etat && etat.suivis[f.id] && etat.suivis[f.id].moi) ||
         (moiP && ti[f.id] && ti[f.id].a && String(ti[f.id].a).trim().toLowerCase() === moiP));
     };
     const estNouveau = function (f) { return !!((infos[f.id] && infos[f.id].badge) || (etat && nonLu(etat.suivis[f.id]))); };
@@ -40763,20 +40758,26 @@
     }
     let liste = favListe.slice();
     if (dCourant) liste = liste.filter(function (f) { return dCourant.ids.indexOf(f.id) !== -1; });
+    if (mesVue) liste = listeMesTopics();
     const F = filtresFav();
     const passe = function (f) {
       const t = ti[f.id] || {};
       if (F.nouveaux && !estNouveau(f)) return false;
-      if (F.mes && !(estMien(f) || f.horsFavoris)) return false;
+      if (mesVue && F.hors && !f.horsFavoris) return false;
       if (F.roses && !(f.rose || t.p)) return false;
 
       if (F.tags.length && !(t.g || []).some(function (g) { return F.tags.indexOf(g) !== -1; })) return false;
       return true;
     };
     const tout = liste.concat(mesHors).filter(passe);
-    etatNb.textContent = tout.length + ' sujet' + (tout.length > 1 ? 's' : '') + (tout.length !== favListe.length + mesHors.length && (nf || dCourant) ? ' sur ' + (favListe.length + mesHors.length) : '');
+    const total = mesVue ? liste.length : favListe.length + mesHors.length;
+    etatNb.textContent = tout.length + ' sujet' + (tout.length > 1 ? 's' : '') + (tout.length !== total && (nf || dCourant) ? ' sur ' + total : '');
+    if (mesVue && !nf) {
+      const nh = liste.filter(function (f) { return f.horsFavoris; }).length;
+      if (nh) etatNb.textContent += ' · ' + nh + ' hors favoris';
+    }
     if (!tout.length) {
-      corps.appendChild(el('div', 'sbp-fav-vide', nf ? 'Aucun sujet avec ces filtres.' : dCourant ? 'Dossier vide : glisse des sujets sur son nom, ou 📁 Déplacer.' : 'Aucun sujet favori.'));
+      corps.appendChild(el('div', 'sbp-fav-vide', mesVue && !nf ? (mesLecture ? 'Lecture de tes topics…' : mesErreur ? 'Tes topics : ' + mesErreur + '.' : 'Aucun topic à ton nom.') : nf ? 'Aucun sujet avec ces filtres.' : dCourant ? 'Dossier vide : glisse des sujets sur son nom, ou 📁 Déplacer.' : 'Aucun sujet favori.'));
       hote.appendChild(etatB);
       return;
     }
@@ -40786,11 +40787,10 @@
       const nouveauxL = tout.filter(estNouveau);
       const reste = tout.filter(function (f) { return !estNouveau(f); });
       const nv = trierFavoris(nouveauxL.filter(function (f) { return estMien(f) || f.horsFavoris; }), ordreSite, etat).concat(trierFavoris(nouveauxL.filter(function (f) { return !(estMien(f) || f.horsFavoris); }), ordreSite, etat));
-      const miens = trierFavoris(reste.filter(function (f) { return estMien(f) || f.horsFavoris; }), ordreSite, etat);
-      const autres = trierFavoris(reste.filter(function (f) { return !(estMien(f) || f.horsFavoris); }), ordreSite, etat);
+
+      const autres = trierFavoris(reste, ordreSite, etat);
       if (nv.length) groupes.push(['nouveaux', '🔴 Nouveaux messages', nv]);
-      if (miens.length) groupes.push(['mes', '✎ Mes topics', miens]);
-      if (autres.length) groupes.push(['favoris', '⭐ Favoris', autres]);
+      if (autres.length) groupes.push(mesVue ? ['mes', '✎ Mes topics', autres] : ['favoris', '⭐ Favoris', autres]);
       if (groupes.length === 1) groupes[0][1] = null;
     } else groupes.push(['tout', null, trierFavoris(tout, ordreSite, etat)]);
     const fermes = reglages.favGroupesFermes && typeof reglages.favGroupesFermes === 'object' ? reglages.favGroupesFermes : (reglages.favGroupesFermes = {});
@@ -41007,6 +41007,112 @@
     const a = document.querySelector('header a.bouton-compte, header .bouton-compte');
     return a ? (a.textContent || '').trim().toLowerCase() : '';
   }
+
+  const MES_DOSSIER = '__mes';
+  let mesT = GM_getValue('mesTopics', null);
+  if (!mesT || !Array.isArray(mesT.liste)) mesT = null;
+  let mesLecture = null, mesErreur = '';
+  function monPseudoBrut() {
+    const a = document.querySelector('header a.bouton-compte, header .bouton-compte');
+    return a ? (a.textContent || '').trim() : '';
+  }
+  function deltaVersDate(t) {
+    const m = String(t || '').match(/(\d+)\s*(s|min|h|j|mois|an)/);
+    if (!m) return null;
+    const u = { s: 1e3, min: 6e4, h: 36e5, j: 864e5, mois: 2592e6, an: 31536e6 }[m[2]];
+    return Date.now() - (+m[1]) * u;
+  }
+  function noterInfosLot(lignes) {
+    const t = lireInfosSujets();
+    const maintenant = Date.now();
+    lignes.forEach(function (x) {
+      const id = String(x.id);
+      const a = t[id] || {};
+      const o = {
+        t: x.title, s: x.slug, a: x.author && (x.author.username || x.author),
+        g: Array.isArray(x.tags) ? x.tags.map(function (g) { return g && (g.name || g); }).filter(Boolean) : null,
+        n: x.post_count, c: x.created_at ? Date.parse(x.created_at) || null : null, l: x.last_post_id,
+        d: deltaVersDate(x.last_post_delta), k: x.is_locked ? 1 : null, p: x.is_pink ? 1 : null,
+      };
+      Object.keys(o).forEach(function (k) { if (o[k] != null && o[k] !== '') a[k] = o[k]; });
+      a.maj = maintenant;
+      t[id] = a;
+    });
+    const ks = Object.keys(t);
+    if (ks.length > 600) ks.sort(function (x, y) { return (t[x].maj || 0) - (t[y].maj || 0); }).slice(0, ks.length - 600).forEach(function (k) { delete t[k]; });
+    try { localStorage.setItem(CLE_INFOS, JSON.stringify(t)); } catch (e) {  }
+  }
+  function lirePageMesTopics(pseudo, page) {
+    const h = { Accept: 'application/json' };
+    const m = document.cookie.match(/(?:^|;\s*)access=([^;]+)/);
+    if (m) h.Authorization = 'Bearer ' + decodeURIComponent(m[1]);
+    return fetch('/nanachannel/loadtopics/?page=' + page + '&search=' + encodeURIComponent(pseudo) + '&filter=pseudo', { credentials: 'include', headers: h }).then(function (r) {
+      if (!r.ok) throw new Error('erreur ' + r.status);
+      return r.json();
+    });
+  }
+
+  function lireMesTopics(force) {
+    if (mesLecture) return mesLecture;
+    const pseudo = monPseudoBrut();
+    if (!pseudo) { mesErreur = 'connecte-toi pour les voir'; return null; }
+    if (mesT && String(mesT.pseudo || '').toLowerCase() !== pseudo.toLowerCase()) mesT = null;
+    const now = Date.now();
+    const complet = force || !mesT || !mesT.tout || now - mesT.tout > 6 * 36e5;
+    if (!complet && mesT.p1 && now - mesT.p1 < 10 * 6e4) return null;
+    const pause = function (ms) { return new Promise(function (x) { setTimeout(x, ms); }); };
+    const moi = pseudo.toLowerCase();
+    const garder = function (x) { const a = x && x.author && (x.author.username || x.author); return x && x.id != null && String(a || '').trim().toLowerCase() === moi; };
+    const enObjet = function (x) { return { id: String(x.id), titre: String(x.title || ('Sujet ' + x.id)), slug: String(x.slug || ''), rose: !!x.is_pink }; };
+    mesLecture = (async function () {
+      const j1 = await lirePageMesTopics(pseudo, 1);
+      const r1 = (j1 && Array.isArray(j1.results) ? j1.results : []).filter(garder);
+      noterInfosLot(r1);
+      const count = j1 && j1.count != null ? +j1.count : r1.length;
+      let liste;
+      if (complet || !mesT || mesT.count !== count) {
+        liste = r1.map(enObjet);
+        const pages = Math.min(50, Math.ceil(count / 20));
+        for (let p = 2; p <= pages; p++) {
+          await pause(1200);
+          const j = await lirePageMesTopics(pseudo, p);
+          const r = (j && Array.isArray(j.results) ? j.results : []).filter(garder);
+          noterInfosLot(r);
+          r.forEach(function (x) { if (!liste.some(function (y) { return y.id === String(x.id); })) liste.push(enObjet(x)); });
+          if (!j || !j.next) break;
+        }
+        mesT = { pseudo: pseudo, liste: liste, count: count, tout: Date.now(), p1: Date.now() };
+      } else {
+        liste = r1.map(enObjet);
+        mesT.liste.forEach(function (x) { if (!liste.some(function (y) { return y.id === x.id; })) liste.push(x); });
+        mesT.liste = liste;
+        mesT.p1 = Date.now();
+      }
+      mesErreur = '';
+      GM_setValue('mesTopics', mesT);
+    })().catch(function (e) {
+      mesErreur = (e && e.message) || String(e);
+      if (mesT) { mesT.p1 = Date.now(); }
+    }).finally(function () { mesLecture = null; });
+    return mesLecture;
+  }
+
+  function listeMesTopics() {
+    const parId = new Map();
+    (favListe || []).forEach(function (f) { parId.set(f.id, f); });
+    const vus = new Set();
+    const l = [];
+    const ajouter = function (x) {
+      if (!x || vus.has(x.id)) return;
+      vus.add(x.id);
+      const f = parId.get(x.id);
+      l.push(f ? Object.assign({}, f, { mien: true }) : { id: x.id, titre: x.titre, slug: x.slug || '', rose: !!x.rose, horsFavoris: true, mien: true });
+    };
+    if (mesT) mesT.liste.forEach(ajouter);
+    const e = etatNotifs();
+    if (e) Object.keys(e.suivis).forEach(function (id) { const x = e.suivis[id]; if (x && x.moi) ajouter({ id: String(id), titre: x.titre || ('Topic n° ' + id), slug: x.slug || '' }); });
+    return l;
+  }
   function exclureMien(id, oui) {
     id = String(id);
     const i = favMesExclus.indexOf(id);
@@ -41035,6 +41141,8 @@
     if (ok) { signalerChangement(); relireEtRedessiner(true); }
   }
   function verifierMesTopicsAuto() {
+    return;
+
     const mode = reglages.favMesAuto || 'tous';
     if (!reglages.favoris || mode === 'non' || !favListe || favMesEnCours) return;
     const miens = mesTopicsIds();
@@ -66260,7 +66368,7 @@ textarea[data-vp-depot]{outline:2px dashed var(--link-color,#4a9eff)!important;o
       majDependances();
     }
 
-    const ECO_DEPENDANCES = { shitbox: { notifications: 'mes topics en favoris' }, fil: { notifications: 'alertes des blogs suivis' } };
+    const ECO_DEPENDANCES = { fil: { notifications: 'alertes des blogs suivis' } };
     let modulesAvant = null;
     let confirmCoupe = null;
     function changerModules(ids, actif) {
